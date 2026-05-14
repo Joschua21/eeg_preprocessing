@@ -1,0 +1,12 @@
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+scikit-learn
+pomegranate<1.0.0
+pyedflib
+lspopt
+mne
+h5py
+six

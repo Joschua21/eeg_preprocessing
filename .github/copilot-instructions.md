@@ -1,0 +1,16 @@
+- [x] Verify that the copilot-instructions.md file in the .github directory is created.
+- [x] Clarify Project Requirements
+- [x] Scaffold the Project
+	- Summary: Created README.md, requirements.txt, pyproject.toml, notebooks/, utils/, and data symlink.
+- [x] Customize the Project
+	- Summary: Added utils modules, vendored Somnotate pipeline, and created notebooks.
+- [x] Install Required Extensions
+	- Summary: No extensions required.
+- [x] Compile the Project
+	- Summary: Not run (no build step requested).
+- [x] Create and Run Task
+	- Summary: Not required for notebook-driven workflow.
+- [x] Launch the Project
+	- Summary: Not requested.
+- [x] Ensure Documentation is Complete
+	- Summary: README updated; checklist finalized.
