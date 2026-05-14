@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 import numpy as np
 import pandas as pd
 
@@ -53,15 +52,17 @@ def score_recordings(
 
         output_dir = recording.output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{recording.edf_path.stem}_somnotate_predictions.csv"
+        output_path = output_dir / f"{recording.edf_path.stem}_somnotate_predictions.parquet"
 
-        prob_json = _format_probability_json(probabilities)
+        prob_df = _format_probability_frame(probabilities)
         df = pd.DataFrame({
             "time_s": timepoints,
             "label": output_labels,
-            "probabilities": prob_json,
+            "label_model": predicted,
+            "label_output": output_labels,
         })
-        df.to_csv(output_path, index=False)
+        df = pd.concat([df, prob_df], axis=1)
+        df.to_parquet(output_path, index=False)
         if export_visbrain:
             states, intervals = convert_state_vector_to_state_intervals(
                 predicted,
@@ -88,13 +89,16 @@ def _predict_state_probabilities(annotator: StateAnnotator, signal_array: np.nda
     return probability_dict
 
 
-def _format_probability_json(probability_dict: dict[int, np.ndarray]) -> list[str]:
+def _format_probability_frame(probability_dict: dict[int, np.ndarray]) -> pd.DataFrame:
     length = next(iter(probability_dict.values())).shape[0] if probability_dict else 0
-    output = []
-    for idx in range(length):
-        payload = {
-            key: float(probability_dict.get(state, np.zeros(length))[idx])
-            for key, state in PROBABILITY_JSON_KEYS.items()
-        }
-        output.append(json.dumps(payload, separators=(",", ":")))
-    return output
+    prob_matrix = {}
+    for key, state in PROBABILITY_JSON_KEYS.items():
+        values = probability_dict.get(state, np.zeros(length))
+        prob_matrix[key] = np.clip(values.astype(float), 0.0, 1.0)
+
+    return pd.DataFrame({
+        "prob_wake": prob_matrix.get("W", np.zeros(length)),
+        "prob_nrem": prob_matrix.get("N", np.zeros(length)),
+        "prob_rem": prob_matrix.get("R", np.zeros(length)),
+        "prob_undef": prob_matrix.get("U", np.zeros(length)),
+    })

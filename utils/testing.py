@@ -181,14 +181,17 @@ def save_somnotate_predictions(
     somnotate_vec = score_somnotate(raw_signals, model_path, sampling_rate_hz)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{csv_path.stem}_somnotate.csv"
+    output_path = output_dir / f"{csv_path.stem}_somnotate.parquet"
     timepoints = np.arange(0, len(somnotate_vec) * time_resolution_s, time_resolution_s, dtype=float)
-    pd.DataFrame({"time_s": timepoints, "label": somnotate_vec}).to_csv(output_path, index=False)
+    pd.DataFrame({"time_s": timepoints, "label": somnotate_vec}).to_parquet(output_path, index=False)
     return output_path, somnotate_vec
 
 
 def load_somnotate_predictions(pred_path: Path) -> np.ndarray:
-    df = pd.read_csv(pred_path)
+    if pred_path.suffix == ".parquet":
+        df = pd.read_parquet(pred_path)
+    else:
+        df = pd.read_csv(pred_path)
     if "label" not in df.columns:
         raise ValueError(f"Missing 'label' column in {pred_path}")
     return df["label"].to_numpy(dtype=int)
