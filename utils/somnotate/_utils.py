@@ -156,8 +156,11 @@ def convert_state_intervals_to_state_vector(states, intervals, mapping,
         try:
             state_vector[start:stop] = mapping[state]
         except KeyError:
-            # Handle the case where state is not found in mapping
-            state_vector[start:stop] = 0  # Set a default value or handle differently
+            raise KeyError(
+                f"State {state!r} not found in mapping. "
+                f"Known states: {sorted(mapping.keys())}. "
+                f"Either fix the hypnogram label or add it to state_to_int in configuration.py."
+            )
     return state_vector
 
 
