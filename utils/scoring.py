@@ -58,6 +58,7 @@ def score_recordings(
             sampling_rate_hz=sampling_rate_hz,
             time_resolution_s=time_resolution,
         )
+        _print_recording_plan(recording, prepared)
 
         output_dir = recording.output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -179,6 +180,72 @@ def _score_prepared_recording(
         }
     )
     return df
+
+
+_STRATEGY_DESCRIPTIONS = {
+    "trim_only": "trim leading/trailing gaps, score the contiguous middle",
+    "mask_inline": "score the kept range as one chunk, mark middle gaps as undefined post-hoc",
+    "split": "split into independent chunks at long middle gaps, fill gaps with undefined",
+    "all_missing": "no scorable signal in this recording (skipping)",
+}
+
+
+def _format_duration(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.0f} s"
+    if seconds < 3600:
+        return f"{seconds / 60:.1f} min"
+    return f"{seconds / 3600:.1f} h"
+
+
+def _print_recording_plan(recording, prepared: PreparedRecording) -> None:
+    strategy = prepared.strategy
+    strategy_desc = _STRATEGY_DESCRIPTIONS.get(strategy, "")
+    gap_segs = [s for s in prepared.segments if s.kind == "gap"]
+    too_short_segs = [s for s in prepared.segments if s.kind == "too_short"]
+
+    print(f"[{recording.subject} {recording.session} date-{recording.date}] {recording.edf_path.name}")
+    print(
+        f"  Duration: {_format_duration(prepared.original_duration_s)} | "
+        f"missing: {_format_duration(prepared.total_missing_s)} "
+        f"({100 * prepared.missing_fraction:.1f}%) | "
+        f"longest gap: {_format_duration(prepared.longest_gap_s)}"
+    )
+    print(f"  Strategy: {strategy} — {strategy_desc}")
+
+    if not prepared.segments:
+        print("  (no segments)")
+        return
+
+    print(f"  Segments ({len(prepared.segments)}):")
+    chunk_ranges = {
+        (int(round(c.original_start_s)), int(round(c.original_end_s))): idx + 1
+        for idx, c in enumerate(prepared.scoring_chunks)
+    }
+    for seg in prepared.segments:
+        start = int(round(seg.original_start_s))
+        stop = int(round(seg.original_end_s))
+        marker = ""
+        if seg.kind == "signal":
+            chunk_idx = chunk_ranges.get((start, stop))
+            if chunk_idx is not None:
+                marker = f"  -> chunk {chunk_idx}"
+            else:
+                marker = "  (within chunk 1)"
+        elif seg.kind == "too_short":
+            marker = "  (not scored)"
+        print(
+            f"    [{start:>8d} -> {stop:>8d} s]  {seg.kind:<10s} "
+            f"({_format_duration(seg.duration_s)}){marker}"
+        )
+
+    if too_short_segs:
+        print(
+            f"  Note: {len(too_short_segs)} segment(s) marked too_short "
+            "(below min_segment_length_s) and will be filled as undefined."
+        )
+    if not gap_segs and strategy != "all_missing":
+        print("  No gaps detected.")
 
 
 def _predict_state_probabilities(annotator: StateAnnotator, signal_array: np.ndarray) -> dict[int, np.ndarray]:
