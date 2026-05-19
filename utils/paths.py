@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -90,7 +91,14 @@ def find_recordings(
         sub_label = normalize_subjid(subjid)
         subject_dir = _find_subject_dir(raw_root, sub_label)
         if subject_dir is None:
+            warnings.warn(
+                f"No subject directory found for {sub_label}.",
+                UserWarning,
+                stacklevel=2,
+            )
             continue
+
+        found_dates: set[str] = set()
         for session_dir in subject_dir.iterdir():
             if not session_dir.is_dir():
                 continue
@@ -99,10 +107,38 @@ def find_recordings(
                 continue
             if not _date_in_filter(date, normalized_dates, normalized_range):
                 continue
+            found_dates.add(date)
+
             ephys_dir = session_dir / "ephys"
             if not ephys_dir.exists():
+                warnings.warn(
+                    f"No ephys/ directory for {sub_label} {session} (date {date}).",
+                    UserWarning,
+                    stacklevel=2,
+                )
                 continue
-            for edf_path in sorted(ephys_dir.glob(f"{sub_label}_ses-*recording-*.edf")):
+
+            edf_paths = sorted(ephys_dir.glob(f"{sub_label}_ses-*recording-*.edf"))
+            if not edf_paths:
+                pvfs_files = list(ephys_dir.glob("*.pvfs"))
+                if pvfs_files:
+                    warnings.warn(
+                        f"No EDF file for {sub_label} {session} (date {date}); "
+                        f"found only .pvfs files in {ephys_dir}. "
+                        "Convert the .pvfs to .edf before scoring.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    warnings.warn(
+                        f"No EEG data files for {sub_label} {session} (date {date}); "
+                        f"{ephys_dir} contains no .edf or .pvfs files.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                continue
+
+            for edf_path in edf_paths:
                 output_dir = (
                     derivatives_root
                     / subject_dir.name
@@ -117,6 +153,15 @@ def find_recordings(
                         edf_path=edf_path,
                         output_dir=output_dir,
                     )
+                )
+
+        if normalized_dates is not None:
+            missing = sorted(set(normalized_dates) - found_dates)
+            for missing_date in missing:
+                warnings.warn(
+                    f"No session directory for {sub_label} on requested date {missing_date}.",
+                    UserWarning,
+                    stacklevel=2,
                 )
 
     return results
