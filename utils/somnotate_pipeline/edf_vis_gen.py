@@ -47,20 +47,29 @@ def generate_edf_and_visbrain_formats(mouse_ids, sessions, recordings, test_trai
     for mouse_id in mouse_ids:
             for session in sessions:
                 for recording in recordings:
-                    csv_file = os.path.join(csv_input_dir, f"{mouse_id}_{session}_{recording}.csv")
-                    edf_file = os.path.join(edf_output_dir, f"output_{mouse_id}_{session}_{recording}.edf")
-                    visbrain_file = os.path.join(annotations_output_dir, f"annotations_visbrain_{mouse_id}_{session}_{recording}.txt")
+                    stem = f"{mouse_id}_{session}_{recording}"
+                    parquet_file = os.path.join(csv_input_dir, f"{stem}.parquet")
+                    csv_file = os.path.join(csv_input_dir, f"{stem}.csv")
+                    edf_file = os.path.join(edf_output_dir, f"output_{stem}.edf")
+                    visbrain_file = os.path.join(annotations_output_dir, f"annotations_visbrain_{stem}.txt")
 
-                    if not os.path.isfile(csv_file):
-                        print(f"File not found: {csv_file}")
-                        continue  # Skip to the next iteration if file does not exist
+                    if os.path.isfile(parquet_file):
+                        signal_file = parquet_file
+                    elif os.path.isfile(csv_file):
+                        signal_file = csv_file
+                    else:
+                        print(f"File not found: {parquet_file} (or .csv)")
+                        continue
                     if os.path.exists(edf_file):
-                        print(f"EDF file already exists: output_{mouse_id}_{session}_{recording}.edf")
-                        continue # Skip to the next iteration if EDF file already exists
-            
-                    print(f"Processing file: {csv_file}")
-                    df = pd.read_csv(csv_file)
-                    base_filename = os.path.splitext(os.path.basename(csv_file))[0]
+                        print(f"EDF file already exists: output_{stem}.edf")
+                        continue
+
+                    print(f"Processing file: {signal_file}")
+                    if signal_file.endswith(".parquet"):
+                        df = pd.read_parquet(signal_file)
+                    else:
+                        df = pd.read_csv(signal_file, encoding="latin1")
+                    base_filename = stem
                     print(base_filename)
                     sampling_rate = sampling_rate  # Hz (samples per second)
 

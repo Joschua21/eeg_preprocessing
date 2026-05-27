@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix
 from utils.somnotate._automated_state_annotation import StateAnnotator
 from utils.somnotate_pipeline import configuration
 from utils.somnotate_pipeline.data_io import load_state_vector, load_raw_signals
-from utils.somnotate_pipeline.mat_to_csv import mat_to_csv
+from utils.somnotate_pipeline.mat_to_csv import mat_to_signal_tables
 from utils.somnotate_pipeline.adjust_delimiters import adjust_delimiters_in_txt_files
 
 from .config import DEFAULT_SAMPLING_RATE_HZ, DEFAULT_SLEEP_STAGE_RESOLUTION_S
@@ -26,12 +26,11 @@ def _generate_edf_and_visbrain(csv_dir: Path, edf_dir: Path, ann_dir: Path, samp
     edf_dir.mkdir(parents=True, exist_ok=True)
     ann_dir.mkdir(parents=True, exist_ok=True)
 
+    from .testing import list_csv_files, load_signal_table
+
     edf_paths: list[Path] = []
-    for csv_path in sorted(csv_dir.glob("*.csv")):
-        if csv_path.name.startswith("._"):
-            # Skip macOS metadata files that are not real CSVs.
-            continue
-        df = pd.read_csv(csv_path, encoding="latin1")
+    for csv_path in list_csv_files(csv_dir):
+        df = load_signal_table(csv_path)
         if not {"EEG1", "EEG2", "EMG", "sleepStage"}.issubset(df.columns):
             raise ValueError(f"Missing required columns in {csv_path}")
 
@@ -124,7 +123,7 @@ def run_training(
     for path in [csv_dir, edf_dir, ann_dir, preprocessed_dir, figures_dir, results_dir]:
         path.mkdir(parents=True, exist_ok=True)
 
-    mat_to_csv(str(training_mat_dir), str(csv_dir), sampling_rate_hz, sleep_stage_resolution_s)
+    mat_to_signal_tables(str(training_mat_dir), str(csv_dir), sampling_rate_hz, sleep_stage_resolution_s)
 
     edf_paths = _generate_edf_and_visbrain(csv_dir, edf_dir, ann_dir, sampling_rate_hz)
     adjust_delimiters_in_txt_files(str(ann_dir))
