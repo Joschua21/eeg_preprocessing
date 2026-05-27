@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
@@ -18,6 +20,32 @@ from utils.somnotate_pipeline.mat_to_csv import mat_to_csv
 from .config import DEFAULT_SAMPLING_RATE_HZ, DEFAULT_SLEEP_STAGE_RESOLUTION_S
 from .paths import get_derivatives_root
 from .preprocessing import preprocess_multichannel
+
+
+def get_test_root(repo_root: Path, model_name: str, test_name: str | None) -> Path:
+    root = get_derivatives_root(repo_root) / "somnotate_testing" / model_name
+    return root / test_name if test_name else root
+
+
+def get_csv_dir(repo_root: Path, model_name: str, test_name: str | None) -> Path:
+    return get_test_root(repo_root, model_name, test_name) / "intermediate" / "csv"
+
+
+def get_predictions_dir(repo_root: Path, model_name: str, test_name: str | None) -> Path:
+    return get_test_root(repo_root, model_name, test_name) / "somnotate_predictions"
+
+
+def list_csv_files(csv_dir: Path) -> list[Path]:
+    if not csv_dir.exists():
+        return []
+    return sorted(p for p in csv_dir.glob("*.csv") if not p.name.startswith("._"))
+
+
+def find_somnotate_predictions(predictions_dir: Path) -> Path | None:
+    if not predictions_dir.exists():
+        return None
+    preds = sorted(p for p in predictions_dir.glob("*_somnotate.parquet") if not p.name.startswith("._"))
+    return preds[0] if preds else None
 
 
 def prepare_testing_csvs(
@@ -37,14 +65,106 @@ def prepare_testing_csvs(
             f"Derivatives root not found at {derivatives_root}. Create data/hypnose_eeg/derivatives."
         )
 
-    output_root = derivatives_root / "somnotate_testing" / model_name
-    if test_name:
-        output_root = output_root / test_name
-    csv_dir = output_root / "intermediate" / "csv"
+    csv_dir = get_csv_dir(repo_root, model_name, test_name)
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     mat_to_csv(str(testing_mat_dir), str(csv_dir), sampling_rate_hz, sleep_stage_resolution_s)
     return csv_dir
+
+
+def ensure_csvs(
+    testing_mat_dir: Path,
+    repo_root: Path,
+    model_name: str,
+    test_name: str | None = None,
+    force: bool = False,
+    sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
+    sleep_stage_resolution_s: int = DEFAULT_SLEEP_STAGE_RESOLUTION_S,
+) -> tuple[Path, list[Path]]:
+    """Return (csv_dir, csv_files). Skip mat_to_csv if all expected CSVs already exist."""
+    csv_dir = get_csv_dir(repo_root, model_name, test_name)
+    csv_files = list_csv_files(csv_dir)
+
+    mat_files = sorted(testing_mat_dir.glob("*.mat")) if testing_mat_dir.exists() else []
+    expected_stems = {p.stem for p in mat_files if not p.name.startswith("._")}
+    present_stems = {p.stem for p in csv_files}
+    missing = expected_stems - present_stems
+
+    if not force and csv_files and not missing:
+        print(f"Using {len(csv_files)} existing CSV(s) in {csv_dir}")
+        return csv_dir, csv_files
+
+    if not mat_files:
+        raise FileNotFoundError(
+            f"No CSVs in {csv_dir} and no .mat files in {testing_mat_dir} to convert."
+        )
+
+    print(f"Converting {len(mat_files)} .mat file(s) -> {csv_dir}")
+    prepare_testing_csvs(
+        testing_mat_dir=testing_mat_dir,
+        repo_root=repo_root,
+        model_name=model_name,
+        test_name=test_name,
+        sampling_rate_hz=sampling_rate_hz,
+        sleep_stage_resolution_s=sleep_stage_resolution_s,
+    )
+    return csv_dir, list_csv_files(csv_dir)
+
+
+def ensure_somnotate_predictions(
+    csv_files: list[Path],
+    predictions_dir: Path,
+    model_path: Path,
+    force: bool = False,
+    sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
+) -> Path:
+    """Return path to a somnotate prediction parquet, computing it from csv_files[0] if missing."""
+    if not force:
+        existing = find_somnotate_predictions(predictions_dir)
+        if existing is not None:
+            print(f"Using existing predictions: {existing}")
+            return existing
+
+    if not csv_files:
+        raise FileNotFoundError(
+            f"No somnotate predictions in {predictions_dir} and no CSV files to compute from."
+        )
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+
+    print(f"Computing somnotate predictions from {csv_files[0].name}")
+    output_path, _ = save_somnotate_predictions(
+        csv_files[0],
+        model_path,
+        predictions_dir,
+        sampling_rate_hz=sampling_rate_hz,
+    )
+    return output_path
+
+
+def load_aligned_vectors(
+    csv_dir: Path,
+    predictions_dir: Path,
+) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """Load raw_signals, somnotate_vec, manual_vectors from disk and align lengths.
+
+    Raises FileNotFoundError with a clear hint if either input is missing.
+    """
+    csv_files = list_csv_files(csv_dir)
+    if not csv_files:
+        raise FileNotFoundError(
+            f"No CSVs in {csv_dir}. Run the data-preparation cell (ensure_csvs / ensure_somnotate_predictions)."
+        )
+    pred_path = find_somnotate_predictions(predictions_dir)
+    if pred_path is None:
+        raise FileNotFoundError(
+            f"No somnotate predictions in {predictions_dir}. Run the data-preparation cell."
+        )
+
+    raw_signals, manual_vectors = load_manual_vectors_from_csvs(csv_files)
+    somnotate_vec = load_somnotate_predictions(pred_path)
+    somnotate_vec, manual_vectors = align_vectors(somnotate_vec, manual_vectors)
+    return raw_signals, somnotate_vec, manual_vectors
 
 
 def _normalize_stage_values(stage_values: Iterable) -> np.ndarray:
@@ -127,9 +247,30 @@ def load_raw_signals_from_csv(
     return df[required].to_numpy(dtype=float)
 
 
+def _short_label_for_stem(stem: str) -> str:
+    suffix_match = re.search(r"recording-\d+[_-](.+)$", stem)
+    if suffix_match:
+        return suffix_match.group(1)
+    subses_match = re.search(r"(sub-[^_-]+[_-]ses-[^_-]+)", stem)
+    if subses_match:
+        return subses_match.group(1)
+    return stem
+
+
+def _resolve_file_labels(csv_paths: list[Path]) -> dict[Path, str]:
+    proposed = {p: _short_label_for_stem(p.stem) for p in csv_paths}
+    counts = Counter(proposed.values())
+    return {p: (lbl if counts[lbl] == 1 else p.stem) for p, lbl in proposed.items()}
+
+
 def load_manual_vectors_from_csvs(
     csv_paths: Iterable[Path],
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    csv_paths = list(csv_paths)
+    if not csv_paths:
+        raise ValueError("No CSV paths provided")
+
+    file_labels = _resolve_file_labels(csv_paths)
     raw_signals: np.ndarray | None = None
     manual_vectors: dict[str, np.ndarray] = {}
 
@@ -137,21 +278,18 @@ def load_manual_vectors_from_csvs(
         signals, vectors = load_testing_csv(csv_path)
         if raw_signals is None:
             raw_signals = signals
-        else:
-            if signals.shape != raw_signals.shape:
-                raise ValueError(
-                    "Raw signal shapes differ across CSVs. "
-                    f"{csv_path.name} has {signals.shape}, expected {raw_signals.shape}."
-                )
+        elif signals.shape != raw_signals.shape:
+            raise ValueError(
+                "Raw signal shapes differ across CSVs. "
+                f"{csv_path.name} has {signals.shape}, expected {raw_signals.shape}."
+            )
 
+        file_label = file_labels[csv_path]
         for name, vec in vectors.items():
-            label = name
+            label = file_label if len(vectors) == 1 else f"{file_label}:{name}"
             if label in manual_vectors:
                 label = f"{csv_path.stem}:{name}"
             manual_vectors[label] = vec
-
-    if raw_signals is None:
-        raise ValueError("No CSV paths provided")
 
     return raw_signals, manual_vectors
 
@@ -335,3 +473,67 @@ def plot_agreement_matrix(
         fig.savefig(output_path)
 
     return fig
+
+
+def _state_label(code: int) -> str:
+    return {0: "0/undef", 1: "1/wake", 2: "2/NREM", 3: "3/REM"}.get(int(code), f"{code}/?")
+
+
+def print_agreement_diagnostic(
+    somnotate_vec: np.ndarray,
+    manual_vectors: dict[str, np.ndarray],
+) -> None:
+    """Print per-vector stats and somnotate-vs-manual confusion matrices.
+
+    Run after align_vectors so all inputs share length.
+    """
+    all_vectors: dict[str, np.ndarray] = {"somnotate": somnotate_vec, **manual_vectors}
+
+    print("=== Vector lengths ===")
+    for name, vec in all_vectors.items():
+        print(f"  {name:40s} {len(vec)} epochs")
+
+    print("\n=== Unique codes per vector ===")
+    for name, vec in all_vectors.items():
+        uniq = sorted({int(v) for v in np.unique(vec)})
+        print(f"  {name:40s} {uniq}")
+
+    all_codes = sorted({int(v) for vec in all_vectors.values() for v in np.unique(vec)})
+    print("\n=== State distribution (epoch counts) ===")
+    header = "  " + " " * 40 + "".join(f"{_state_label(c):>10s}" for c in all_codes) + f"{'total':>10s}"
+    print(header)
+    for name, vec in all_vectors.items():
+        counts = [int(np.sum(vec == c)) for c in all_codes]
+        row = "  " + f"{name:40s}" + "".join(f"{n:>10d}" for n in counts) + f"{len(vec):>10d}"
+        print(row)
+
+    for scorer, manual_vec in manual_vectors.items():
+        n = min(len(somnotate_vec), len(manual_vec))
+        s = somnotate_vec[:n]
+        m = manual_vec[:n]
+        print(f"\n=== Confusion: somnotate (rows) vs {scorer} (cols) ===")
+        codes = sorted({int(v) for v in np.unique(np.concatenate([s, m]))})
+        col_header = "  " + " " * 14 + "".join(f"{_state_label(c):>10s}" for c in codes) + f"{'recall':>10s}"
+        print(col_header)
+        col_totals = np.zeros(len(codes), dtype=int)
+        for i, ci in enumerate(codes):
+            row_mask = s == ci
+            row_total = int(row_mask.sum())
+            cells = []
+            for j, cj in enumerate(codes):
+                cnt = int(np.sum(row_mask & (m == cj)))
+                cells.append(cnt)
+                col_totals[j] += cnt
+            recall = (cells[i] / row_total * 100.0) if row_total else float("nan")
+            row = "  " + f"{_state_label(ci):<14s}" + "".join(f"{c:>10d}" for c in cells) + f"{recall:>9.2f}%"
+            print(row)
+        precisions = []
+        for j, cj in enumerate(codes):
+            row_mask = s == cj
+            tp = int(np.sum(row_mask & (m == cj)))
+            denom = int(col_totals[j])
+            precisions.append((tp / denom * 100.0) if denom else float("nan"))
+        prec_row = "  " + f"{'precision':<14s}" + "".join(f"{p:>9.2f}%" for p in precisions) + " " * 10
+        print(prec_row)
+        overall = float(np.mean(s == m) * 100.0)
+        print(f"  overall agreement: {overall:.2f}%   (recall = % of somnotate's class confirmed by scorer; precision = % of scorer's class confirmed by somnotate)")
