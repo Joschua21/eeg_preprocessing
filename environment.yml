@@ -1,24 +1,38 @@
 name: eeg_preprocessing
+# Pinned to the versions known to work in `somnotate_env` as of 2026-06.
+# Python is held at 3.9 because pomegranate<1.0.0 (which somnotate relies on)
+# does not support newer Python. Upgrading Python means replacing pomegranate,
+# which is a much larger change.
 channels:
   - defaults
 dependencies:
   - python=3.9
   - pip
   - pip:
-    - numpy
-    - pandas
-    - scipy
-    - matplotlib
+    - "numpy<2"
+    - "pandas>=2.0,<3"
+    - "scipy>=1.13,<2"
+
+    - "matplotlib>=3.9,<4"
+    - "PyQt6"
     - seaborn
-    - scikit-learn
-    - "pomegranate<1.0.0"
+    - ipympl
+
+    - "pyarrow>=15"
+    - fastparquet
+
+    # ML / signal-processing
+    - "scikit-learn>=1.5"
+    - "pomegranate<1.0.0"   # API used by the vendored somnotate code
+
     - pyedflib
+    - edfio
     - lspopt
     - mne
     - h5py
     - six
+
     - ipykernel
     - ipython
-    - ipympl
-    - edfio
+
     - -e .
