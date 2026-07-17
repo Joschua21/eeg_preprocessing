@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -341,29 +342,42 @@ def load_somnotate_vector(pred_path: Path) -> np.ndarray:
     return pred_df["label"].map(lambda v: inverse_map.get(int(v), 0)).to_numpy(dtype=int)
 
 
-def plot_scoring_detailed(
+def _load_recording_arrays(recording, channel_labels: list[str] | None = None):
+    """Load raw signals + somnotate label vector for one resolved recording.
+
+    Returns (raw_signals, somnotate_vec). Raises FileNotFoundError if the recording
+    has no somnotate predictions parquet yet.
+    """
+    channel_labels = channel_labels or DEFAULT_CHANNEL_LABELS
+    pred_path = recording.output_dir / f"{recording.edf_path.stem}_somnotate_predictions.parquet"
+    if not pred_path.exists():
+        raise FileNotFoundError(
+            f"No somnotate predictions at {pred_path}. Run score_recordings for this recording first."
+        )
+
+    # imported lazily: data_io pulls in EDF readers that are slow to import
+    from utils.somnotate_pipeline.data_io import load_raw_signals
+
+    print(f"Loading {recording.edf_path.name}…")
+    raw_signals = load_raw_signals(str(recording.edf_path), channel_labels)
+    somnotate_vec = load_somnotate_vector(pred_path)
+    return raw_signals, somnotate_vec
+
+
+def _load_scored_recording(
     subjid: int | str,
     date: int | str,
     repo_root: Path,
-    manual_vectors: dict[str, np.ndarray] | None = None,
     recording_index: int = 0,
     channel_labels: list[str] | None = None,
-    sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
-    **plot_kwargs,
 ):
-    """Load one scored recording by subject/date and show the detailed state view.
+    """Resolve a scored recording by subject/date and load its raw signals + labels.
 
-    Finds the recording, reads its EDF and the somnotate predictions written by
-    `score_recordings`, and hands both to `plot_detailed_comparison`. Human scorer
-    vectors are optional — pass `manual_vectors` to add scorer rows and mismatch
-    shading, or omit it to view the somnotate scoring on its own.
-
-    `recording_index` selects among multiple EDFs for the same subject/date.
-    Extra keyword arguments (eeg_channel, view_length_s, delta_band, …) pass
-    through to `plot_detailed_comparison`.
+    Returns (recording, raw_signals, somnotate_vec). `recording_index` is clamped to
+    the valid range rather than raising, so an out-of-range index still shows a
+    recording. Raises if no recording or no predictions file exists.
     """
     repo_root = Path(repo_root)
-    channel_labels = channel_labels or DEFAULT_CHANNEL_LABELS
 
     recordings = find_recordings(repo_root, [subjid], dates=[date])
     if not recordings:
@@ -385,19 +399,36 @@ def plot_scoring_detailed(
             f"showing [{clamped_index}] {recording.edf_path.name}"
         )
 
-    pred_path = recording.output_dir / f"{recording.edf_path.stem}_somnotate_predictions.parquet"
-    if not pred_path.exists():
-        raise FileNotFoundError(
-            f"No somnotate predictions at {pred_path}. Run score_recordings for this recording first."
-        )
+    raw_signals, somnotate_vec = _load_recording_arrays(recording, channel_labels)
+    return recording, raw_signals, somnotate_vec
 
-    # imported lazily: data_io pulls in EDF readers that are slow to import
-    from utils.somnotate_pipeline.data_io import load_raw_signals
 
-    print(f"Loading {recording.edf_path.name}…")
-    raw_signals = load_raw_signals(str(recording.edf_path), channel_labels)
-    somnotate_vec = load_somnotate_vector(pred_path)
+def plot_scoring_detailed(
+    subjid: int | str,
+    date: int | str,
+    repo_root: Path,
+    manual_vectors: dict[str, np.ndarray] | None = None,
+    recording_index: int = 0,
+    channel_labels: list[str] | None = None,
+    sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
+    **plot_kwargs,
+):
+    """Load one scored recording by subject/date and show the detailed state view.
 
+    Finds the recording, reads its EDF and the somnotate predictions written by
+    `score_recordings`, and hands both to `plot_detailed_comparison`. Human scorer
+    vectors are optional — pass `manual_vectors` to add scorer rows and mismatch
+    shading, or omit it to view the somnotate scoring on its own.
+
+    `recording_index` selects among multiple EDFs for the same subject/date.
+    Extra keyword arguments (eeg_channel, view_length_s, delta_band, …) pass
+    through to `plot_detailed_comparison`.
+    """
+    recording, raw_signals, somnotate_vec = _load_scored_recording(
+        subjid, date, repo_root,
+        recording_index=recording_index,
+        channel_labels=channel_labels,
+    )
     return plot_detailed_comparison(
         raw_signals,
         sampling_rate_hz=sampling_rate_hz,
@@ -405,3 +436,330 @@ def plot_scoring_detailed(
         manual_vectors=manual_vectors,
         **plot_kwargs,
     )
+
+
+# Model-int → (display name, colour) for the three scored vigilance states.
+# somnotate labels are stored as absolute model ints (1=awake, 2=non-REM, 3=REM,
+# 0=undefined); undefined/gap epochs are dropped from the distributions.
+_STATE_CODE_TO_NAME = {1: "Wake", 2: "NREM", 3: "REM"}
+_STATE_NAME_TO_COLOR = {"Wake": "red", "NREM": "blue", "REM": "gold"}
+
+
+def _per_epoch_band_metrics(
+    band_signal: np.ndarray,
+    samples_per_epoch: int,
+    reducer: str,
+) -> np.ndarray:
+    """Split a 1-D signal into non-overlapping epochs and reduce each to one scalar.
+
+    reducer="power" -> mean square (band power); "rms" -> sqrt of mean square.
+    A trailing partial epoch (shorter than samples_per_epoch) is dropped.
+    """
+    n_epochs = len(band_signal) // samples_per_epoch
+    if n_epochs == 0:
+        return np.empty(0, dtype=float)
+    trimmed = band_signal[: n_epochs * samples_per_epoch].astype(float)
+    epochs = trimmed.reshape(n_epochs, samples_per_epoch)
+    mean_square = np.mean(epochs ** 2, axis=1)
+    return mean_square if reducer == "power" else np.sqrt(mean_square)
+
+
+_METRIC_KEYS = ["delta", "theta", "td", "emg"]
+
+
+def _as_list(value) -> list | None:
+    """Normalise a scalar-or-iterable argument to a list (or None)."""
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
+
+
+def _display_inline(fig) -> None:
+    """Render a standalone Figure into the notebook output as a PNG.
+
+    Uses IPython display so it works under any active matplotlib backend (including
+    `%matplotlib qt`, which otherwise routes figures to external windows). No-op when
+    not running inside IPython.
+    """
+    try:
+        import io
+        from IPython.display import Image, display
+    except ImportError:
+        return
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+    buf.seek(0)
+    display(Image(data=buf.read()))
+
+
+def _compute_state_epoch_metrics(
+    raw_signals: np.ndarray,
+    somnotate_vec: np.ndarray,
+    sampling_rate_hz: int,
+    epoch_length_s: float,
+    eeg_channel: int,
+    delta_band: tuple[float, float],
+    theta_band: tuple[float, float],
+    emg_band: tuple[float, float],
+) -> tuple[dict[str, dict[str, np.ndarray]], dict[int, int]]:
+    """Per-state, per-epoch metric arrays for one recording, plus label-count occupancy.
+
+    Only Wake/NREM/REM samples enter the metrics; undefined (0) epochs are dropped.
+    Returns (per_state, occupancy_counts) where occupancy_counts maps state code
+    (0/1/2/3) to number of scored labels of that state. Identical per-recording maths to
+    the original single-recording implementation.
+    """
+    fs = sampling_rate_hz
+    time_resolution_s = configuration.time_resolution
+    eeg = raw_signals[:, eeg_channel]
+    emg = raw_signals[:, 2]
+
+    # Filter the continuous recording BEFORE splitting by state, so state stitching
+    # never introduces filter edge artefacts at the concatenation boundaries.
+    delta_sig = configuration.chebychev_bandpass_filter(eeg, lowcut=delta_band[0], highcut=delta_band[1], fs=fs)
+    theta_sig = configuration.chebychev_bandpass_filter(eeg, lowcut=theta_band[0], highcut=theta_band[1], fs=fs)
+    emg_sig = configuration.chebychev_bandpass_filter(emg, lowcut=emg_band[0], highcut=emg_band[1], fs=fs)
+
+    # Expand the per-epoch state labels to a per-sample vector, then align lengths.
+    state_abs = np.abs(somnotate_vec).astype(int)
+    samples_per_label = int(round(time_resolution_s * fs))
+    sample_state = np.repeat(state_abs, samples_per_label)
+    n = min(len(sample_state), len(delta_sig))
+    sample_state = sample_state[:n]
+    delta_sig, theta_sig, emg_sig = delta_sig[:n], theta_sig[:n], emg_sig[:n]
+
+    samples_per_epoch = int(round(epoch_length_s * fs))
+    if samples_per_epoch < 1:
+        raise ValueError("epoch_length_s * sampling_rate_hz must be >= 1 sample")
+
+    eps = 1e-12
+    per_state: dict[str, dict[str, np.ndarray]] = {}
+    for code, name in _STATE_CODE_TO_NAME.items():
+        mask = sample_state == code
+        delta_power = _per_epoch_band_metrics(delta_sig[mask], samples_per_epoch, "power")
+        theta_power = _per_epoch_band_metrics(theta_sig[mask], samples_per_epoch, "power")
+        emg_rms = _per_epoch_band_metrics(emg_sig[mask], samples_per_epoch, "rms")
+        td_ratio = theta_power / (delta_power + eps)
+        per_state[name] = {
+            "delta": delta_power,
+            "theta": theta_power,
+            "td": td_ratio,
+            "emg": emg_rms,
+        }
+
+    occupancy_counts = {code: int(np.sum(state_abs == code)) for code in (0, 1, 2, 3)}
+    return per_state, occupancy_counts
+
+
+def _render_state_distribution_figure(
+    per_state: dict[str, dict[str, np.ndarray]],
+    title: str,
+    epoch_length_s: float,
+    bin_width: float,
+    normalize_percentiles: tuple[float, float],
+    delta_band: tuple[float, float],
+    theta_band: tuple[float, float],
+    emg_band: tuple[float, float],
+):
+    """Build a standalone 2x2 histogram figure from aggregated per-state metrics.
+
+    Metrics are normalised to [0, 1] using percentiles pooled across all states, then
+    histogrammed with `bin_width` bins on a shared 0–1 axis (Wake=red, NREM=blue,
+    REM=gold). Returns (fig, norm_bounds); fig is a bare matplotlib Figure (not tied to
+    pyplot / any interactive backend) so it can be rendered inline without a Qt window.
+    """
+    from matplotlib.figure import Figure
+
+    lo_pct, hi_pct = normalize_percentiles
+    norm_bounds: dict[str, tuple[float, float]] = {}
+    for key in _METRIC_KEYS:
+        pooled = np.concatenate([per_state[name][key] for name in _STATE_CODE_TO_NAME.values()])
+        if pooled.size == 0:
+            norm_bounds[key] = (0.0, 1.0)
+            continue
+        lo = float(np.percentile(pooled, lo_pct))
+        hi = float(np.percentile(pooled, hi_pct))
+        if hi <= lo:
+            hi = lo + 1.0
+        norm_bounds[key] = (lo, hi)
+
+    def _normalize(values: np.ndarray, key: str) -> np.ndarray:
+        lo, hi = norm_bounds[key]
+        return np.clip((values - lo) / (hi - lo), 0.0, 1.0)
+
+    metric_titles = {
+        "delta": f"Delta power ({delta_band[0]:g}-{delta_band[1]:g} Hz)",
+        "theta": f"Theta power ({theta_band[0]:g}-{theta_band[1]:g} Hz)",
+        "td": "Theta : Delta ratio",
+        "emg": f"EMG RMS ({emg_band[0]:g}-{emg_band[1]:g} Hz)",
+    }
+    metric_xlabel = {
+        "delta": "Normalised power",
+        "theta": "Normalised power",
+        "td": "Normalised ratio",
+        "emg": "Normalised amplitude",
+    }
+
+    bins = np.arange(0.0, 1.0 + bin_width, bin_width)
+    fig = Figure(figsize=(12, 8))
+    axes = fig.subplots(2, 2).ravel()
+
+    for ax, key in zip(axes, _METRIC_KEYS):
+        lo, hi = norm_bounds[key]
+        for name in _STATE_CODE_TO_NAME.values():
+            values = per_state[name][key]
+            if values.size == 0:
+                continue
+            normed = _normalize(values, key)
+            weights = np.full(values.shape, 100.0 / values.size)
+            ax.hist(normed, bins=bins, weights=weights, histtype="step",
+                    linewidth=1.8, color=_STATE_NAME_TO_COLOR[name], label=name)
+            ax.hist(normed, bins=bins, weights=weights, histtype="stepfilled",
+                    alpha=0.15, color=_STATE_NAME_TO_COLOR[name])
+        ax.set_title(metric_titles[key])
+        ax.set_xlabel(f"{metric_xlabel[key]}  [{lo:.3g} … {hi:.3g}]")
+        ax.set_ylabel("% of epochs")
+        ax.set_xlim(0.0, 1.0)
+        ax.legend(frameon=False, fontsize=9)
+
+    fig.suptitle(f"{title} — state metric distributions ({epoch_length_s:g}s epochs)")
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    return fig, norm_bounds
+
+
+def plot_state_distributions(
+    subjid: int | str | list,
+    date: int | str | list | None,
+    repo_root: Path,
+    epoch_length_s: float = 10.0,
+    bin_width: float = 0.1,
+    eeg_channel: int = 0,
+    delta_band: tuple[float, float] = (0.5, 4.0),
+    theta_band: tuple[float, float] = (6.0, 10.0),
+    emg_band: tuple[float, float] = (10.0, 45.0),
+    normalize_percentiles: tuple[float, float] = (1.0, 99.0),
+    channel_labels: list[str] | None = None,
+    sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
+    inline: bool = True,
+):
+    """Per-state distributions of delta power, theta power, T:D ratio and EMG RMS.
+
+    `subjid` and `date` accept a single value or a list. One figure is produced per
+    (subject, date) session — a session's multiple EDF recordings are pooled into that
+    session's distribution — so e.g. 2 subjects × 3 dates yields up to 6 figures.
+
+    For each session: band-filter the continuous EEG/EMG, group samples by vigilance
+    state (Wake/NREM/REM; undefined/gap epochs are dropped entirely), stitch each
+    state's samples into a continuous stream, epoch it into `epoch_length_s` windows,
+    and reduce every epoch to delta power, theta power, theta:delta ratio, and EMG RMS.
+
+    Each metric is normalised to [0, 1] using `normalize_percentiles` pooled across
+    states (not per state — between-state differences are preserved), then histogrammed
+    with `bin_width` bins on a shared 0–1 axis. The absolute value range mapping to 0/1
+    is shown in each panel's axis label. Occupancy printed per session is the % of
+    scored Wake/NREM/REM epochs (undefined excluded, so the three sum to 100%).
+
+    With `inline=True` (default) each figure is rendered into the notebook output as a
+    PNG regardless of the active matplotlib backend (so it works alongside
+    `%matplotlib qt`). Set `inline=False` to skip display and just return the figures.
+
+    Returns a list of dicts, one per session, each with keys: `subject`, `date`,
+    `recordings` (EDF names pooled), `fig`, `per_state`, `norm_bounds`, and
+    `state_occupancy` (% of scored Wake/NREM/REM epochs).
+    """
+    if eeg_channel not in (0, 1):
+        raise ValueError("eeg_channel must be 0 (EEG1) or 1 (EEG2)")
+
+    repo_root = Path(repo_root)
+    subjids = _as_list(subjid)
+    dates = _as_list(date)
+
+    recordings = find_recordings(repo_root, subjids, dates=dates)
+    if not recordings:
+        raise ValueError(f"No recordings found for subject(s) {subjids} date(s) {dates}")
+
+    # Group recordings by (subject, date), preserving discovery order.
+    groups: dict[tuple[str, str], list] = {}
+    for rec in recordings:
+        groups.setdefault((rec.subject, rec.date), []).append(rec)
+
+    time_resolution_s = configuration.time_resolution
+    outputs = []
+    for (subject, date_str), recs in groups.items():
+        # Pool per-epoch metrics and occupancy across the session's recordings.
+        pooled_state: dict[str, dict[str, list]] = {
+            name: {key: [] for key in _METRIC_KEYS} for name in _STATE_CODE_TO_NAME.values()
+        }
+        occupancy_counts = {code: 0 for code in (0, 1, 2, 3)}
+        used_recordings: list[str] = []
+
+        for rec in recs:
+            try:
+                raw_signals, somnotate_vec = _load_recording_arrays(rec, channel_labels)
+            except FileNotFoundError as exc:
+                warnings.warn(str(exc), UserWarning, stacklevel=2)
+                continue
+            print(f"Computing metrics for {rec.edf_path.name}…")
+            per_state, occ = _compute_state_epoch_metrics(
+                raw_signals, somnotate_vec, sampling_rate_hz, epoch_length_s,
+                eeg_channel, delta_band, theta_band, emg_band,
+            )
+            for name in _STATE_CODE_TO_NAME.values():
+                for key in _METRIC_KEYS:
+                    pooled_state[name][key].append(per_state[name][key])
+            for code in occupancy_counts:
+                occupancy_counts[code] += occ[code]
+            used_recordings.append(rec.edf_path.name)
+
+        if not used_recordings:
+            warnings.warn(
+                f"No scored recordings for {subject} date-{date_str}; skipping.",
+                UserWarning, stacklevel=2,
+            )
+            continue
+
+        per_state = {
+            name: {key: np.concatenate(pooled_state[name][key]) for key in _METRIC_KEYS}
+            for name in _STATE_CODE_TO_NAME.values()
+        }
+
+        # ----- state occupancy printout (scored Wake/NREM/REM only; undefined excluded) -----
+        scored_total = occupancy_counts[1] + occupancy_counts[2] + occupancy_counts[3]
+        rec_note = used_recordings[0] if len(used_recordings) == 1 else f"{len(used_recordings)} recordings"
+        print(f"\n[{subject} date-{date_str}] {rec_note}")
+        print(f"State occupancy (of {scored_total} scored Wake/NREM/REM {time_resolution_s:g}s epochs):")
+        for code, name in _STATE_CODE_TO_NAME.items():
+            pct = 100.0 * occupancy_counts[code] / scored_total if scored_total else 0.0
+            n_ep = len(per_state[name]["delta"])
+            print(f"  {name:<5s}: {pct:5.1f}%   ({n_ep} analysis epochs of {epoch_length_s:g}s)")
+
+        fig, norm_bounds = _render_state_distribution_figure(
+            per_state,
+            title=f"{subject} date-{date_str}",
+            epoch_length_s=epoch_length_s,
+            bin_width=bin_width,
+            normalize_percentiles=normalize_percentiles,
+            delta_band=delta_band,
+            theta_band=theta_band,
+            emg_band=emg_band,
+        )
+        if inline:
+            _display_inline(fig)
+
+        occupancy_pct = {
+            name: (100.0 * occupancy_counts[code] / scored_total if scored_total else 0.0)
+            for code, name in _STATE_CODE_TO_NAME.items()
+        }
+        outputs.append({
+            "subject": subject,
+            "date": date_str,
+            "recordings": used_recordings,
+            "fig": fig,
+            "per_state": per_state,
+            "norm_bounds": norm_bounds,
+            "state_occupancy": occupancy_pct,
+        })
+
+    return outputs
