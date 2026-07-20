@@ -11,6 +11,12 @@ DEFAULT_CHANNEL_LABELS = [
     "EMG EMG",
 ]
 
+# Name of the EEG dataset directory under the shared server root
+# (…/hypnose/hypnose_eeg), used by the data-location resolver in paths.py.
+EEG_SUBDIR = "hypnose_eeg"
+
+# Legacy fallback: repo-local symlink to the EEG dataset, used only when the shared
+# hypnose-analysis data-location system is unavailable (see paths.py).
 DATA_SYMLINK = Path("data/hypnose_eeg")
 
 # Output labels: 0=Wake, 1=NREM, 2=REM, 3=Undefined

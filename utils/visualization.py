@@ -629,12 +629,93 @@ def _render_state_distribution_figure(
     return fig, norm_bounds
 
 
+# Short per-metric labels for the raw per-state grid (rows = state, cols = metric).
+_METRIC_SHORT = {
+    "delta": "Delta power",
+    "theta": "Theta power",
+    "td": "Theta:Delta",
+    "emg": "EMG RMS",
+}
+
+
+def _render_state_raw_distribution_figure(
+    per_state: dict[str, dict[str, np.ndarray]],
+    title: str,
+    epoch_length_s: float,
+    bin_width: float,
+    range_percentiles: tuple[float, float],
+):
+    """Per-state, raw-unit histograms — one row per state, one column per metric.
+
+    Unlike the normalised overlay, each panel keeps the metric's *raw* values. Every
+    column (metric) shares one X range — that metric's `range_percentiles` (1st–99th by
+    default) pooled across all three states — so the states line up on a common axis and
+    are directly comparable; Y is % of that state's epochs. `bin_width` is reused as a
+    fraction of that p1–p99 range, so it yields the same bin count as the overlay
+    (0.1 → 10 bins). A dashed line marks each state's mean; μ/σ are printed in each title
+    so location and spread are readable directly. Epochs in the outer tails fall outside
+    the plotted range (so bars sum to slightly under 100%). Returns a bare Figure (no
+    pyplot / interactive backend).
+    """
+    from matplotlib.figure import Figure
+
+    states = list(_STATE_CODE_TO_NAME.values())
+    lo_pct, hi_pct = range_percentiles
+    n_bins = max(1, round(1.0 / bin_width))
+
+    # Shared X range per metric: p1–p99 of the values pooled across all states, so the
+    # three rows use identical axes/bins and can be compared column-wise.
+    metric_range: dict[str, tuple[float, float]] = {}
+    for key in _METRIC_KEYS:
+        pooled = np.concatenate([per_state[s][key] for s in states]) if states else np.empty(0)
+        if pooled.size == 0:
+            metric_range[key] = (0.0, 1.0)
+            continue
+        lo = float(np.percentile(pooled, lo_pct))
+        hi = float(np.percentile(pooled, hi_pct))
+        if hi <= lo:
+            hi = lo + 1e-9
+        metric_range[key] = (lo, hi)
+
+    fig = Figure(figsize=(4 * len(_METRIC_KEYS), 3 * len(states)))
+    axes = fig.subplots(len(states), len(_METRIC_KEYS), squeeze=False)
+
+    for r, state in enumerate(states):
+        color = _STATE_NAME_TO_COLOR[state]
+        for c, key in enumerate(_METRIC_KEYS):
+            ax = axes[r][c]
+            values = per_state[state][key]
+            short = _METRIC_SHORT[key]
+            lo, hi = metric_range[key]
+            bins = np.linspace(lo, hi, n_bins + 1)
+            ax.set_xlim(lo, hi)
+            ax.set_xlabel(short)
+            ax.set_ylabel(f"{state}\n% of epochs" if c == 0 else "% of epochs")
+            if values.size == 0:
+                ax.set_title(f"{state} · {short}\n(no epochs)", fontsize=9)
+                continue
+
+            weights = np.full(values.shape, 100.0 / values.size)
+            ax.hist(values, bins=bins, weights=weights, color=color,
+                    alpha=0.75, edgecolor="white", linewidth=0.3)
+
+            mean = float(np.mean(values))
+            std = float(np.std(values))
+            ax.axvline(mean, color="black", linestyle="--", linewidth=1.0)
+            ax.set_title(f"{state} · {short}\nμ={mean:.3g}  σ={std:.3g}", fontsize=9)
+
+    fig.suptitle(f"{title} — per-state raw distributions ({epoch_length_s:g}s epochs)")
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    return fig
+
+
 def plot_state_distributions(
     subjid: int | str | list,
     date: int | str | list | None,
     repo_root: Path,
     epoch_length_s: float = 10.0,
     bin_width: float = 0.1,
+    show_raw_distributions: bool = True,
     eeg_channel: int = 0,
     delta_band: tuple[float, float] = (0.5, 4.0),
     theta_band: tuple[float, float] = (6.0, 10.0),
@@ -643,6 +724,9 @@ def plot_state_distributions(
     channel_labels: list[str] | None = None,
     sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
     inline: bool = True,
+    save: bool = False,
+    save_name: str = "state_distributions",
+    save_dpi: int = 600,
 ):
     """Per-state distributions of delta power, theta power, T:D ratio and EMG RMS.
 
@@ -655,19 +739,35 @@ def plot_state_distributions(
     state's samples into a continuous stream, epoch it into `epoch_length_s` windows,
     and reduce every epoch to delta power, theta power, theta:delta ratio, and EMG RMS.
 
-    Each metric is normalised to [0, 1] using `normalize_percentiles` pooled across
-    states (not per state — between-state differences are preserved), then histogrammed
-    with `bin_width` bins on a shared 0–1 axis. The absolute value range mapping to 0/1
-    is shown in each panel's axis label. Occupancy printed per session is the % of
-    scored Wake/NREM/REM epochs (undefined excluded, so the three sum to 100%).
+    Two figures are produced per session:
+      * the normalised overlay — each metric normalised to [0, 1] using
+        `normalize_percentiles` pooled across states (not per state, so between-state
+        differences are preserved) and histogrammed with `bin_width` bins on a shared
+        0–1 axis; the absolute value range mapping to 0/1 is shown in each panel's label.
+      * (when `show_raw_distributions=True`) a per-state raw grid — one row per state,
+        one column per metric, showing each metric's raw values over that state's own
+        1st–99th percentile range with a dashed mean line and μ/σ in the title, so the
+        real location and spread per state are readable. `bin_width` is reused there as a
+        fraction of the p1–p99 range (0.1 → 10 bins).
+
+    Occupancy printed per session is the % of scored Wake/NREM/REM epochs (undefined
+    excluded, so the three sum to 100%).
 
     With `inline=True` (default) each figure is rendered into the notebook output as a
     PNG regardless of the active matplotlib backend (so it works alongside
     `%matplotlib qt`). Set `inline=False` to skip display and just return the figures.
 
+    With `save=True` both figures are written as PDF (named `{save_name}_norm_…` /
+    `{save_name}_raw_…`, at `save_dpi`) into the session's `figures/` directory —
+    `derivatives/sub-*/ses-*/figures`, i.e. next to `saved_results`. Figure styling
+    follows the active matplotlib rcParams, so call hypnose-analysis's `use_style()` at
+    the top of the notebook to apply the house style.
+
     Returns a list of dicts, one per session, each with keys: `subject`, `date`,
-    `recordings` (EDF names pooled), `fig`, `per_state`, `norm_bounds`, and
-    `state_occupancy` (% of scored Wake/NREM/REM epochs).
+    `recordings` (EDF names pooled), `fig` (normalised overlay), `raw_fig` (per-state
+    raw grid, or None), `per_state`, `norm_bounds`, `state_occupancy` (% of scored
+    Wake/NREM/REM epochs), `figures_dir` (the session figures dir), and `saved_paths`
+    (PDFs written, empty unless `save=True`).
     """
     if eeg_channel not in (0, 1):
         raise ValueError("eeg_channel must be 0 (EEG1) or 1 (EEG2)")
@@ -748,6 +848,32 @@ def plot_state_distributions(
         if inline:
             _display_inline(fig)
 
+        raw_fig = None
+        if show_raw_distributions:
+            raw_fig = _render_state_raw_distribution_figure(
+                per_state,
+                title=f"{subject} date-{date_str}",
+                epoch_length_s=epoch_length_s,
+                bin_width=bin_width,
+                range_percentiles=normalize_percentiles,
+            )
+            if inline:
+                _display_inline(raw_fig)
+
+        # Figures dir sits next to saved_results: derivatives/sub-*/ses-*/figures.
+        # recs[0].output_dir is .../ses-*/saved_results, so its parent is the session dir.
+        figures_dir = recs[0].output_dir.parent / "figures"
+
+        saved_paths: list[Path] = []
+        if save:
+            figures_dir.mkdir(parents=True, exist_ok=True)
+            to_save = [("norm", fig)] + ([("raw", raw_fig)] if raw_fig is not None else [])
+            for suffix, f in to_save:
+                out_path = figures_dir / f"{save_name}_{suffix}_{subject}_date-{date_str}.pdf"
+                f.savefig(out_path, dpi=save_dpi, bbox_inches="tight")
+                saved_paths.append(out_path)
+            print(f"Saved {len(saved_paths)} figure(s) to {figures_dir}")
+
         occupancy_pct = {
             name: (100.0 * occupancy_counts[code] / scored_total if scored_total else 0.0)
             for code, name in _STATE_CODE_TO_NAME.items()
@@ -757,9 +883,12 @@ def plot_state_distributions(
             "date": date_str,
             "recordings": used_recordings,
             "fig": fig,
+            "raw_fig": raw_fig,
             "per_state": per_state,
             "norm_bounds": norm_bounds,
             "state_occupancy": occupancy_pct,
+            "figures_dir": figures_dir,
+            "saved_paths": saved_paths,
         })
 
     return outputs
