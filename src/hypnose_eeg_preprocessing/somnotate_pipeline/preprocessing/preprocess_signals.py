@@ -30,7 +30,7 @@ except ImportError:
     warnings.warn(message)
     from scipy.signal import spectrogram as get_spectrogram
 
-from .data_io import (
+from ..io.data_io import (
     ArgumentParser,
     load_dataframe,
     check_dataframe,
@@ -38,7 +38,7 @@ from .data_io import (
     export_preprocessed_signals,
 )
 
-from utils.somnotate._utils import (
+from ...somnotate._utils import (
     robust_normalize,
 )
 
@@ -114,7 +114,7 @@ def preprocess(raw_signal, sampling_frequency_in_hz,
 
 if __name__ == '__main__':
 
-    from configuration import (
+    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
         time_resolution,
         state_annotation_signals,
         plot_raw_signals,

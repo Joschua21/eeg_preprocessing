@@ -9,15 +9,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 
-from utils.somnotate._automated_state_annotation import StateAnnotator
-from utils.somnotate_pipeline import configuration
-from utils.somnotate_pipeline.data_io import load_state_vector, load_raw_signals
-from utils.somnotate_pipeline.mat_to_csv import mat_to_signal_tables
-from utils.somnotate_pipeline.adjust_delimiters import adjust_delimiters_in_txt_files
+from ..somnotate._automated_state_annotation import StateAnnotator
+from ..somnotate_pipeline.utils import configuration
+from ..somnotate_pipeline.io.data_io import load_state_vector, load_raw_signals
+from ..somnotate_pipeline.preprocessing.mat_to_csv import mat_to_signal_tables
+from ..somnotate_pipeline.processing.adjust_delimiters import adjust_delimiters_in_txt_files
 
-from .config import DEFAULT_SAMPLING_RATE_HZ, DEFAULT_SLEEP_STAGE_RESOLUTION_S
-from .paths import get_derivatives_root
-from .preprocessing import preprocess_multichannel
+from ..config import DEFAULT_SAMPLING_RATE_HZ, DEFAULT_SLEEP_STAGE_RESOLUTION_S
+from ..io.paths import get_derivatives_root
+from ..preprocessing.preprocessing import preprocess_multichannel
 
 
 def _generate_edf_and_visbrain(csv_dir: Path, edf_dir: Path, ann_dir: Path, sampling_rate_hz: float) -> list[Path]:
@@ -26,7 +26,7 @@ def _generate_edf_and_visbrain(csv_dir: Path, edf_dir: Path, ann_dir: Path, samp
     edf_dir.mkdir(parents=True, exist_ok=True)
     ann_dir.mkdir(parents=True, exist_ok=True)
 
-    from .testing import list_csv_files, load_signal_table
+    from ..testing.testing import list_csv_files, load_signal_table
 
     edf_paths: list[Path] = []
     for csv_path in list_csv_files(csv_dir):

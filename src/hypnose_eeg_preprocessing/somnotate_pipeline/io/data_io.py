@@ -18,7 +18,7 @@ except ImportError:
 from pyedflib import EdfReader
 from six import ensure_str
 
-from utils.somnotate._utils import convert_state_intervals_to_state_vector
+from ...somnotate._utils import convert_state_intervals_to_state_vector
 
 
 def check_dataframe(df, columns, column_to_dtype=None):
@@ -173,7 +173,7 @@ def load_state_vector(file_path, mapping, time_resolution=1):
 
     states, intervals = load_hypnogram(file_path)
 
-    from utils.somnotate._utils import convert_state_intervals_to_state_vector
+    from ...somnotate._utils import convert_state_intervals_to_state_vector
     state_vector = convert_state_intervals_to_state_vector(
         states, intervals, mapping=mapping, time_resolution=time_resolution)
 

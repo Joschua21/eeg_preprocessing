@@ -9,14 +9,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from utils.somnotate._manual_state_annotation import TimeSeriesStateViewer
-from utils.somnotate._utils import (
+from ..somnotate._manual_state_annotation import TimeSeriesStateViewer
+from ..somnotate._utils import (
     convert_state_intervals_to_state_vector,
     convert_state_vector_to_state_intervals,
     _get_intervals,
 )
-from utils.somnotate_pipeline import configuration
-from utils.somnotate_pipeline.configuration import (
+from ..somnotate_pipeline.utils import configuration
+from ..somnotate_pipeline.utils.configuration import (
     plot_raw_signals,
     plot_states,
     state_to_color,
@@ -26,8 +26,8 @@ from utils.somnotate_pipeline.configuration import (
     default_view_length,
 )
 
-from .config import DEFAULT_CHANNEL_LABELS, DEFAULT_SAMPLING_RATE_HZ, MODEL_TO_OUTPUT_LABEL
-from .paths import find_recordings
+from ..config import DEFAULT_CHANNEL_LABELS, DEFAULT_SAMPLING_RATE_HZ, MODEL_TO_OUTPUT_LABEL
+from ..io.paths import find_recordings
 
 
 def plot_recording_comparison(
@@ -356,7 +356,7 @@ def _load_recording_arrays(recording, channel_labels: list[str] | None = None):
         )
 
     # imported lazily: data_io pulls in EDF readers that are slow to import
-    from utils.somnotate_pipeline.data_io import load_raw_signals
+    from ..somnotate_pipeline.io.data_io import load_raw_signals
 
     print(f"Loading {recording.edf_path.name}…")
     raw_signals = load_raw_signals(str(recording.edf_path), channel_labels)

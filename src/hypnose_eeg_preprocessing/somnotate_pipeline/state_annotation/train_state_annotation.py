@@ -8,7 +8,7 @@ annotate new data sets.
 import numpy as np
 import os
 
-from .data_io import (
+from ..io.data_io import (
     ArgumentParser,
     load_dataframe,
     check_dataframe,
@@ -16,11 +16,11 @@ from .data_io import (
     load_preprocessed_signals,
 )
 
-from utils.somnotate._automated_state_annotation import StateAnnotator
+from ...somnotate._automated_state_annotation import StateAnnotator
 
 if __name__ == '__main__':
 
-    from configuration import state_to_int, time_resolution
+    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import state_to_int, time_resolution
 
     parser = ArgumentParser()
     parser.add_argument("spreadsheet_file_path", help="Use datasets specified in /path/to/spreadsheet.csv")

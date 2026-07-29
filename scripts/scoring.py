@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+"""CLI entry point for scoring recordings with a trained somnotate model.
+
+Placeholder. The CLI is added in a follow-up step; the library API it will wrap
+is available now as::
+
+    from hypnose_eeg_preprocessing.scoring import score_recordings
+"""
+
+from __future__ import annotations
+
+import argparse
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    build_parser().parse_args(argv)
+    raise SystemExit("scripts/scoring.py is not implemented yet.")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

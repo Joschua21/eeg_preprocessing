@@ -12,8 +12,8 @@ from scipy.signal import (
     # cheby1,
 )
 from functools import partial
-from utils.somnotate._plotting import plot_signals, plot_states
-from utils.somnotate._utils import (
+from ...somnotate._plotting import plot_signals, plot_states
+from ...somnotate._utils import (
     pad_along_axis,
     remove_padding_along_axis,
 )

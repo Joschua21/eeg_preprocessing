@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Iterable
 
-from .config import DATA_SYMLINK, EEG_SUBDIR
+from ..config import DATA_SYMLINK, EEG_SUBDIR
 
 SUBJECT_RE = re.compile(r"^sub-(\d{3})")
 SESSION_DATE_RE = re.compile(r"^ses-([^-_]+)_date-(\d{8})$")

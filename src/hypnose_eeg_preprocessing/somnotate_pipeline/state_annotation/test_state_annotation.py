@@ -10,11 +10,11 @@ import os
 
 from sklearn.metrics import confusion_matrix as get_confusion_matrix
 
-from utils.somnotate._automated_state_annotation import StateAnnotator
-from utils.somnotate._utils import convert_state_vector_to_state_intervals
-from utils.somnotate._plotting import plot_signals
+from ...somnotate._automated_state_annotation import StateAnnotator
+from ...somnotate._utils import convert_state_vector_to_state_intervals
+from ...somnotate._plotting import plot_signals
 
-from .data_io import (
+from ..io.data_io import (
     ArgumentParser,
     load_dataframe,
     check_dataframe,
@@ -40,7 +40,7 @@ def normalize_data(data):
 
 if __name__ == '__main__':
 
-    from configuration import (
+    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
         state_to_int,
         int_to_state,
         time_resolution,
@@ -156,9 +156,9 @@ if __name__ == '__main__':
 
         if args.show:
 
-            from data_io import load_raw_signals
+            from hypnose_eeg_preprocessing.somnotate_pipeline.io.data_io import load_raw_signals
 
-            from configuration import (
+            from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
                 plot_raw_signals,
                 state_annotation_signals,
                 plot_states,

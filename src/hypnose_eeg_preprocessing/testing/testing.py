@@ -11,15 +11,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils.somnotate._automated_state_annotation import StateAnnotator
-from utils.somnotate._manual_state_annotation import TimeSeriesStateViewer
-from utils.somnotate._utils import convert_state_vector_to_state_intervals, _get_intervals
-from utils.somnotate_pipeline import configuration
-from utils.somnotate_pipeline.mat_to_csv import mat_to_signal_tables
+from ..somnotate._automated_state_annotation import StateAnnotator
+from ..somnotate._manual_state_annotation import TimeSeriesStateViewer
+from ..somnotate._utils import convert_state_vector_to_state_intervals, _get_intervals
+from ..somnotate_pipeline.utils import configuration
+from ..somnotate_pipeline.preprocessing.mat_to_csv import mat_to_signal_tables
 
-from .config import DEFAULT_SAMPLING_RATE_HZ, DEFAULT_SLEEP_STAGE_RESOLUTION_S
-from .paths import get_derivatives_root
-from .preprocessing import preprocess_multichannel
+from ..config import DEFAULT_SAMPLING_RATE_HZ, DEFAULT_SLEEP_STAGE_RESOLUTION_S
+from ..io.paths import get_derivatives_root
+from ..preprocessing.preprocessing import preprocess_multichannel
 
 
 def get_test_root(repo_root: Path, model_name: str, test_name: str | None) -> Path:

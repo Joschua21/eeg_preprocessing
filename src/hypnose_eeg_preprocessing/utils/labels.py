@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import MANUAL_TO_OUTPUT_LABEL
+from ..config import MANUAL_TO_OUTPUT_LABEL
 
 
 def load_manual_labels_csv(

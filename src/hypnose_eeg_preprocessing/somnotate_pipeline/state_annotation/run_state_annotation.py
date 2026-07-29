@@ -12,13 +12,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from utils.somnotate._automated_state_annotation import StateAnnotator
-from utils.somnotate._utils import (
+from ...somnotate._automated_state_annotation import StateAnnotator
+from ...somnotate._utils import (
     convert_state_vector_to_state_intervals,
     _get_intervals,
 )
 
-from .data_io import (
+from ..io.data_io import (
     ArgumentParser,
     load_dataframe,
     check_dataframe,
@@ -63,7 +63,7 @@ def _get_score(vec):
 
 if __name__ == '__main__':
 
-    from configuration import (
+    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
         state_to_int,
         int_to_state,
         plot_raw_signals,

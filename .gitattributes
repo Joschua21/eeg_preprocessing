@@ -1,0 +1,19 @@
+# Normalise line endings for text files.
+* text=auto eol=lf
+
+# Notebooks: keep as text, but don't let them dominate language stats or diffs.
+*.ipynb text linguist-documentation
+
+# Vendored somnotate code is not authored here.
+src/hypnose_eeg_preprocessing/somnotate/** linguist-vendored
+src/hypnose_eeg_preprocessing/somnotate_pipeline/** linguist-vendored
+
+# Binary formats.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.mat binary
+*.edf binary
+*.parquet binary
+*.pickle binary
+*.npz binary

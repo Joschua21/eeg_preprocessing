@@ -1,6 +1,40 @@
-# eeg_preprocessing
+# hypnose-eeg-preprocessing
 
-Somnotate-based EEG preprocessing and scoring pipeline.
+Somnotate-based EEG preprocessing and scoring pipeline. Importable as
+`hypnose_eeg_preprocessing`; intended to be consumed as the preprocessing submodule of
+`hypnose-eeg-analysis`.
+
+## Layout
+
+```
+src/hypnose_eeg_preprocessing/
+├── config.py               # sampling rates, channel labels, state-label maps
+├── io/paths.py             # dataset discovery + data-location resolution
+├── preprocessing/          # preprocessing.py, gap_correction.py
+├── training/training.py    # run_training
+├── scoring/scoring.py      # score_recordings
+├── testing/testing.py      # manual-vs-automated validation
+├── visualization/          # plotting
+├── utils/labels.py         # manual-label loading
+├── somnotate/              # vendored somnotate library (upstream, unmodified layout)
+└── somnotate_pipeline/     # vendored somnotate example pipeline
+    ├── io/data_io.py
+    ├── utils/configuration.py
+    ├── preprocessing/      # mat_to_csv.py, preprocess_signals.py
+    ├── processing/         # adjust_delimiters.py, edf_vis_gen.py
+    └── state_annotation/   # train/run/test_state_annotation.py
+scripts/                    # CLI entry points (training.py, scoring.py)
+notebooks/
+```
+
+Each subpackage re-exports its public API, so the import path stays flat:
+
+```python
+from hypnose_eeg_preprocessing.scoring import score_recordings
+from hypnose_eeg_preprocessing.training import run_training
+from hypnose_eeg_preprocessing.preprocessing import prepare_recording
+from hypnose_eeg_preprocessing.visualization import plot_scoring_detailed
+```
 
 ## Setup
 
@@ -17,7 +51,7 @@ one conda env:
 2. Create and activate the env (installs this repo and its dependencies):
    ```bash
    conda env create -f environment.yml
-   conda activate eeg_preprocessing
+   conda activate hypnose-eeg-preprocessing
    ```
 3. Install hypnose-analysis into the env (editable), from its main folder:
    ```bash
@@ -27,7 +61,7 @@ one conda env:
    ```
 4. Register the Jupyter kernel:
    ```bash
-   python -m ipykernel install --user --name eeg_preprocessing --display-name "Python (eeg_preprocessing)"
+   python -m ipykernel install --user --name hypnose-eeg-preprocessing --display-name "Python (hypnose-eeg-preprocessing)"
    ```
 
 ### 2. Set the data location
@@ -73,20 +107,20 @@ Point directly at the EEG roots with env vars — no profile, no server-root con
 **2a. Set them in the conda env (recommended — works however the kernel is launched,
 including VS Code from the Dock):**
 ```bash
-conda activate eeg_preprocessing
+conda activate hypnose-eeg-preprocessing
 conda env config vars set \
   HYPNOSE_EEG_RAWDATA_ROOT=/path/to/eeg/rawdata \
   HYPNOSE_EEG_DERIVATIVES_ROOT=/path/to/eeg/derivatives
-conda deactivate && conda activate eeg_preprocessing   # reactivate to apply
-conda env config vars list                              # verify
+conda deactivate && conda activate hypnose-eeg-preprocessing   # reactivate to apply
+conda env config vars list                                      # verify
 ```
-Test (from the eeg_preprocessing repo root):
+Test (from anywhere, once the package is installed):
 ```bash
-python -c "from utils.paths import get_derivatives_root; print(get_derivatives_root())"
+python -c "from hypnose_eeg_preprocessing.io import get_derivatives_root; print(get_derivatives_root())"
 ```
 It should print your EEG derivatives path.
 
-**2b. Or set them per notebook — first cell, before importing `utils`:**
+**2b. Or set them per notebook — first cell, before importing `hypnose_eeg_preprocessing`:**
 ```python
 import os
 os.environ["HYPNOSE_EEG_RAWDATA_ROOT"] = "/path/to/eeg/rawdata"
@@ -99,3 +133,10 @@ machine-specific paths into a shared notebook.
 ## Notebooks
 - notebooks/training.ipynb
 - notebooks/scoring.ipynb
+- notebooks/testing.ipynb
+- notebooks/utils.ipynb
+
+## Scripts
+
+`scripts/training.py` and `scripts/scoring.py` are placeholders for the terminal-callable
+CLI wrappers; they are not implemented yet.

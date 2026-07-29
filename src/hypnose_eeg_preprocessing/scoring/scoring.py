@@ -7,21 +7,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from utils.somnotate._automated_state_annotation import StateAnnotator
-from utils.somnotate._utils import convert_state_vector_to_state_intervals
-from utils.somnotate_pipeline.configuration import time_resolution
-from utils.somnotate_pipeline.data_io import load_raw_signals, export_hypnogram
+from ..somnotate._automated_state_annotation import StateAnnotator
+from ..somnotate._utils import convert_state_vector_to_state_intervals
+from ..somnotate_pipeline.utils.configuration import time_resolution
+from ..somnotate_pipeline.io.data_io import load_raw_signals, export_hypnogram
 
-from .config import (
+from ..config import (
     DEFAULT_CHANNEL_LABELS,
     DEFAULT_SAMPLING_RATE_HZ,
     MODEL_TO_OUTPUT_LABEL,
     PROBABILITY_JSON_KEYS,
 )
-from .gap_correction import PreparedRecording, prepare_recording
-from .paths import find_recordings, get_derivatives_root
-from .preprocessing import preprocess_multichannel
-from .somnotate_pipeline import configuration
+from ..preprocessing.gap_correction import PreparedRecording, prepare_recording
+from ..io.paths import find_recordings, get_derivatives_root
+from ..preprocessing.preprocessing import preprocess_multichannel
+from ..somnotate_pipeline.utils import configuration
 
 
 UNDEFINED_MODEL_LABEL = 0

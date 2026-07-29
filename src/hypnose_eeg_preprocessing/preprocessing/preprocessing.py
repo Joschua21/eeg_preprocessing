@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from utils.somnotate_pipeline.preprocess_signals import preprocess
-from utils.somnotate_pipeline.configuration import time_resolution
+from ..somnotate_pipeline.preprocessing.preprocess_signals import preprocess
+from ..somnotate_pipeline.utils.configuration import time_resolution
 
 
 def preprocess_multichannel(raw_signals: np.ndarray, sampling_rate_hz: float) -> np.ndarray:
