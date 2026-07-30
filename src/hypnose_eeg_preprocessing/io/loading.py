@@ -11,8 +11,11 @@ loaded arrays out.
 
 from __future__ import annotations
 
+import json
 import re
+import warnings
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -26,6 +29,7 @@ from ..config import (
     MODEL_TO_OUTPUT_LABEL,
 )
 from .paths import find_recordings, get_derivatives_root
+from .selectors import parse_date_range, parse_dates, parse_subjects
 
 
 # --------------------------------------------------------------------------------
@@ -296,7 +300,220 @@ def load_aligned_vectors(
 
 
 # --------------------------------------------------------------------------------
-# Scored recordings (selector-driven)
+# Scoring outputs: where they live, and reading them back
+# --------------------------------------------------------------------------------
+
+# Suffixes `score_recordings` writes next to each recording. Defined here so the
+# naming has exactly one owner — both the writer (scoring) and the readers below
+# derive paths from these rather than rebuilding the strings.
+PREDICTIONS_SUFFIX = "_somnotate_predictions.parquet"
+SEGMENTS_SUFFIX = "_somnotate_segments.json"
+HYPNOGRAM_SUFFIX = "_somnotate_predictions.txt"
+
+
+def prediction_path(recording) -> Path:
+    """Path to the per-epoch predictions parquet for a resolved recording."""
+    return recording.output_dir / f"{recording.edf_path.stem}{PREDICTIONS_SUFFIX}"
+
+
+def segments_path(recording) -> Path:
+    """Path to the segment/gap metadata JSON for a resolved recording."""
+    return recording.output_dir / f"{recording.edf_path.stem}{SEGMENTS_SUFFIX}"
+
+
+def hypnogram_path(recording) -> Path:
+    """Path to the visbrain hypnogram .txt for a resolved recording."""
+    return recording.output_dir / f"{recording.edf_path.stem}{HYPNOGRAM_SUFFIX}"
+
+
+@dataclass(frozen=True)
+class ScoredRef:
+    """One recording that `score_recordings` has produced (or could produce) output for.
+
+    `scored` says whether the predictions parquet actually exists yet, so a caller can
+    tell "not scored" apart from "no such recording".
+    """
+
+    subject: int
+    session: str
+    date: str
+    recording: str
+    edf_path: Path
+    predictions_path: Path
+    segments_path: Path
+    scored: bool
+
+
+def _subject_number(label: str) -> int | str:
+    """"sub-066" -> 66; anything without digits is returned unchanged."""
+    digits = "".join(ch for ch in label if ch.isdigit())
+    return int(digits) if digits else label
+
+
+def find_scored(
+    sub,
+    date=None,
+    date_range=None,
+    repo_root: Path | None = None,
+    scored_only: bool = True,
+) -> list[ScoredRef]:
+    """Find the scoring outputs for a subject/date selection.
+
+    Accepts the same forgiving selectors as the CLI — `66`, `"066"`, `"sub-066"`,
+    lists, and `"66,67"` all work, as do `date="20260707"` and
+    `date_range="20260707-20260718"`.
+
+    With `scored_only` (the default) only recordings whose predictions parquet exists
+    are returned. Pass False to also see recordings that have not been scored yet —
+    useful for reporting what is still outstanding.
+    """
+    subjects = parse_subjects(sub)
+    dates = parse_dates(date) or None
+    span = parse_date_range(date_range)
+    if dates and span:
+        raise ValueError("Use either date or date_range, not both.")
+
+    recordings = find_recordings(repo_root, subjects, dates=dates, date_range=span)
+
+    refs: list[ScoredRef] = []
+    for rec in recordings:
+        pred = prediction_path(rec)
+        ref = ScoredRef(
+            subject=_subject_number(rec.subject),
+            session=rec.session,
+            date=rec.date,
+            recording=rec.edf_path.stem,
+            edf_path=rec.edf_path,
+            predictions_path=pred,
+            segments_path=segments_path(rec),
+            scored=pred.exists(),
+        )
+        if ref.scored or not scored_only:
+            refs.append(ref)
+    return refs
+
+
+def _epoch_seconds(df: pd.DataFrame) -> float:
+    """Duration of one epoch, from the spacing of `time_s` in a single recording.
+
+    Falls back to somnotate's configured annotation resolution when the spacing cannot
+    be measured (a one-row file, or `time_s` not loaded via `columns=`).
+    """
+    if "time_s" in df.columns and len(df) > 1:
+        step = float(pd.Series(df["time_s"]).diff().median())
+        if step > 0:
+            return step
+    # imported lazily: configuration pulls in matplotlib and mutates rcParams
+    from ..somnotate_pipeline.utils import configuration
+
+    return float(configuration.time_resolution)
+
+
+def load_scores(
+    sub,
+    date=None,
+    date_range=None,
+    repo_root: Path | None = None,
+    columns: list[str] | None = None,
+    missing: str = "warn",
+) -> pd.DataFrame:
+    """Load per-epoch scoring results for a subject/date selection into one DataFrame.
+
+    Reads only the predictions parquet — never the EDF — so it stays fast enough to
+    call across a whole cohort.
+
+    The result is tidy: every row is one epoch, with `subject`, `date`, `session` and
+    `recording` prepended to the stored columns, so several recordings/animals can be
+    concatenated and then grouped or filtered::
+
+        df = load_scores([66, 67], date_range="20260707-20260718")
+        nrem = df[df["label_output"] == 1]
+        nrem.groupby(["subject", "date"]).size()
+
+    Stored columns are `time_s`, `label`, `label_model`, `label_output`, `segment_id`,
+    `kind`, and `prob_wake` / `prob_nrem` / `prob_rem` / `prob_undef`.
+
+    Arguments:
+    ----------
+    columns -- read only these stored columns (the four identifier columns are always
+        included). Pushed down to the parquet reader, so it saves IO as well as memory.
+
+    missing -- what to do about selected recordings that have not been scored:
+        "warn" (default), "raise", or "ignore".
+
+    Raises FileNotFoundError if nothing in the selection has been scored, so an empty
+    result is never mistaken for "no sleep found".
+    """
+    if missing not in ("warn", "raise", "ignore"):
+        raise ValueError(f"missing must be 'warn', 'raise' or 'ignore', got {missing!r}")
+
+    refs = find_scored(sub, date, date_range, repo_root, scored_only=False)
+    if not refs:
+        raise FileNotFoundError(
+            f"No recordings found for subject(s) {sub!r}"
+            + (f" date {date!r}" if date else "")
+            + (f" range {date_range!r}" if date_range else "")
+            + "."
+        )
+
+    unscored = [r for r in refs if not r.scored]
+    if unscored:
+        summary = ", ".join(f"sub-{r.subject:03d}/{r.date}/{r.recording}" for r in unscored[:5])
+        more = "" if len(unscored) <= 5 else f" (+{len(unscored) - 5} more)"
+        message = (
+            f"{len(unscored)} selected recording(s) have no somnotate predictions yet: "
+            f"{summary}{more}. Run `score` for them first."
+        )
+        if missing == "raise":
+            raise FileNotFoundError(message)
+        if missing == "warn":
+            warnings.warn(message, UserWarning, stacklevel=2)
+
+    read_columns = None
+    if columns is not None:
+        read_columns = list(dict.fromkeys(columns))
+
+    frames: list[pd.DataFrame] = []
+    for ref in refs:
+        if not ref.scored:
+            continue
+        df = pd.read_parquet(ref.predictions_path, columns=read_columns)
+        # Duration of one epoch, so callers never have to hardcode it. Derived from the
+        # file's own time_s spacing rather than assumed: somnotate's annotation
+        # resolution (1 s) is NOT the manual scoring epoch
+        # (DEFAULT_SLEEP_STAGE_RESOLUTION_S, 10 s), and confusing the two silently
+        # scales every duration. With epoch_s present, `df.epoch_s.sum()` is seconds of
+        # recording whatever the resolution was.
+        df.insert(0, "epoch_s", _epoch_seconds(df))
+        # Identifiers first, so the frame reads left-to-right from "which recording"
+        # to "what happened in it".
+        df.insert(0, "recording", ref.recording)
+        df.insert(0, "session", ref.session)
+        df.insert(0, "date", ref.date)
+        df.insert(0, "subject", ref.subject)
+        frames.append(df)
+
+    if not frames:
+        raise FileNotFoundError(
+            f"Nothing in this selection has been scored yet ({len(refs)} recording(s) "
+            "matched). Run `score` for them first."
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
+def load_segments(ref) -> dict:
+    """Read the segment/gap metadata JSON written alongside the predictions.
+
+    Accepts a `ScoredRef` or a path. Describes how the recording was chunked around
+    dropouts; the per-epoch `segment_id` column in `load_scores` indexes into it.
+    """
+    path = Path(getattr(ref, "segments_path", ref))
+    with open(path) as f:
+        return json.load(f)
+
+
+# --------------------------------------------------------------------------------
+# Scored recordings with signals (selector-driven)
 # --------------------------------------------------------------------------------
 
 def load_recording_arrays(recording, channel_labels: list[str] | None = None):
@@ -304,9 +521,11 @@ def load_recording_arrays(recording, channel_labels: list[str] | None = None):
 
     Returns (raw_signals, somnotate_vec). Raises FileNotFoundError if the recording
     has no somnotate predictions parquet yet.
+
+    This reads the EDF, which is slow; for the labels alone use `load_scores`.
     """
     channel_labels = channel_labels or DEFAULT_CHANNEL_LABELS
-    pred_path = recording.output_dir / f"{recording.edf_path.stem}_somnotate_predictions.parquet"
+    pred_path = prediction_path(recording)
     if not pred_path.exists():
         raise FileNotFoundError(
             f"No somnotate predictions at {pred_path}. Run score_recordings for this recording first."

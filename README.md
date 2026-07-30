@@ -249,6 +249,78 @@ score(["--model", "my-model", "--sub", "66", "--save-distribution"])
 `scripts/training.py` and `scripts/scoring.py` are thin shims over the same code,
 for running straight from a checkout.
 
+## Loading scored data
+
+The everyday loop is: **score once**, then load the results back to compute things.
+`load_scores` is the read side — it takes the same selectors as the CLI and returns one
+tidy DataFrame, reading only the predictions parquet (never the EDF), so it is fast
+enough to call across a whole cohort.
+
+```python
+from hypnose_eeg_preprocessing.io import load_scores
+
+df = load_scores(66, date=20260707)          # one session
+df = load_scores([66, 67, 68])               # several animals, all their dates
+df = load_scores(66, date_range="20260707-20260718")
+```
+
+`66`, `"066"` and `"sub-066"` are interchangeable, as are lists and `"66,67"`.
+
+Every row is one epoch. Four identifier columns are prepended to what was stored:
+
+| | |
+|---|---|
+| `subject` `date` `session` `recording` | which recording the row came from |
+| `epoch_s` | duration of one epoch, in seconds — **use this for durations** |
+| `time_s` | epoch start, seconds into the recording |
+| `label_output` | 0=Wake, 1=NREM, 2=REM, 3=Undefined |
+| `label_model` | somnotate's own coding (1=Wake, 2=NREM, 3=REM, 0=Undefined) |
+| `segment_id` `kind` | which continuous chunk the epoch belongs to (recordings are split around dropouts) |
+| `prob_wake` `prob_nrem` `prob_rem` `prob_undef` | per-state model confidence |
+
+Because it is one frame, per-animal summaries are a groupby rather than a loop:
+
+```python
+df = load_scores([66, 67], date_range="20260707-20260718")
+nrem = df[df["label_output"] == 1]
+nrem.groupby(["subject", "date"])["epoch_s"].sum() / 3600      # NREM hours
+```
+
+> Sum `epoch_s` rather than counting rows and multiplying by a constant. Scored epochs
+> are 1 s (somnotate's `time_resolution`) — *not* the 10 s
+> `DEFAULT_SLEEP_STAGE_RESOLUTION_S`, which is the epoch of the **manual** labels used
+> for training. Those two are independent, and mixing them silently scales every
+> duration. `epoch_s` is read from each file, so it stays right regardless.
+
+Pass `columns=[...]` to read only what you need — it is pushed down to the parquet
+reader, so it saves IO as well as memory:
+
+```python
+load_scores(66, columns=["time_s", "label_output"])
+```
+
+Recordings that have not been scored yet are skipped with a warning; use
+`missing="raise"` to fail instead, or `missing="ignore"` to stay quiet. If *nothing*
+in the selection is scored you get a `FileNotFoundError`, so an empty result is never
+mistaken for "no sleep found".
+
+Two companions:
+
+```python
+from hypnose_eeg_preprocessing.io import find_scored, load_segments
+
+find_scored(66)                        # what exists on disk, without reading it
+find_scored(66, scored_only=False)     # ...including what still needs scoring
+load_segments(ref)                     # chunk/gap metadata; segment_id indexes into it
+```
+
+`find_scored` returns `ScoredRef` objects (`subject`, `date`, `session`, `recording`,
+`edf_path`, `predictions_path`, `segments_path`, `scored`) for when you want per-file
+control rather than one concatenated frame.
+
+> This package deliberately stops at loading. Downstream computation — bout detection,
+> sleep-period statistics, cross-animal modelling — belongs in `hypnose-eeg-analysis`.
+
 ## Figure styles
 
 Figures are styled by hypnose-analysis so every Hypnose repo produces the same

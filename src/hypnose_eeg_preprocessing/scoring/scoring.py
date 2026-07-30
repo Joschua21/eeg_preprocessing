@@ -19,6 +19,7 @@ from ..config import (
     PROBABILITY_JSON_KEYS,
 )
 from ..preprocessing.gap_correction import PreparedRecording, prepare_recording
+from ..io.loading import hypnogram_path, prediction_path, segments_path
 from ..io.paths import find_recordings, get_derivatives_root
 from ..preprocessing.preprocessing import preprocess_multichannel
 from ..somnotate_pipeline.utils import configuration
@@ -62,9 +63,10 @@ def score_recordings(
 
         output_dir = recording.output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
-        stem = recording.edf_path.stem
-        output_path = output_dir / f"{stem}_somnotate_predictions.parquet"
-        sidecar_path = output_dir / f"{stem}_somnotate_segments.json"
+        # Output naming is owned by io.loading, so the readers there and this writer
+        # cannot drift apart.
+        output_path = prediction_path(recording)
+        sidecar_path = segments_path(recording)
 
         df = _score_prepared_recording(
             prepared,
@@ -76,7 +78,7 @@ def score_recordings(
             json.dump(prepared.to_dict(), f, indent=2)
 
         if export_visbrain:
-            hyp_path = output_dir / f"{stem}_somnotate_predictions.txt"
+            hyp_path = hypnogram_path(recording)
             states, intervals = convert_state_vector_to_state_intervals(
                 df["label_model"].to_numpy(dtype=int),
                 mapping=configuration.int_to_state,
