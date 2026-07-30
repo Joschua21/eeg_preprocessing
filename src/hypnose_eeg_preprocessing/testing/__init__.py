@@ -1,10 +1,11 @@
-"""Validation of automated scoring against manual annotations."""
+"""Validation of automated scoring against manual annotations.
 
-from .testing import (
-    agreement_matrix,
+The loaders below now live in `hypnose_eeg_preprocessing.io.loading`; they are
+re-exported here so existing `from …testing import load_…` callers keep working.
+"""
+
+from ..io.loading import (
     align_vectors,
-    ensure_csvs,
-    ensure_somnotate_predictions,
     find_somnotate_predictions,
     get_csv_dir,
     get_predictions_dir,
@@ -16,6 +17,11 @@ from .testing import (
     load_signal_table,
     load_somnotate_predictions,
     load_testing_csv,
+)
+from .testing import (
+    agreement_matrix,
+    ensure_csvs,
+    ensure_somnotate_predictions,
     plot_agreement_matrix,
     plot_testing_comparison,
     plot_testing_comparison_detailed,

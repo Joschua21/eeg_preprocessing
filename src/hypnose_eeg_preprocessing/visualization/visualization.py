@@ -7,11 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 
 from ..somnotate._manual_state_annotation import TimeSeriesStateViewer
 from ..somnotate._utils import (
-    convert_state_intervals_to_state_vector,
     convert_state_vector_to_state_intervals,
     _get_intervals,
 )
@@ -19,15 +17,19 @@ from ..somnotate_pipeline.utils import configuration
 from ..somnotate_pipeline.utils.configuration import (
     plot_raw_signals,
     plot_states,
-    state_to_color,
-    state_display_order,
-    state_to_int,
-    default_selection_length,
-    default_view_length,
 )
 
-from ..config import DEFAULT_CHANNEL_LABELS, DEFAULT_SAMPLING_RATE_HZ, MODEL_TO_OUTPUT_LABEL
+from ..config import (
+    DEFAULT_DISTRIBUTION_BIN_WIDTH,
+    DEFAULT_DISTRIBUTION_EPOCH_LENGTH_S,
+    DEFAULT_EEG_CHANNEL,
+    DEFAULT_RECORDING_INDEX,
+    DEFAULT_SAMPLING_RATE_HZ,
+    DEFAULT_VIEW_LENGTH_S,
+)
+from ..io.loading import load_recording_arrays, load_scored_recording
 from ..io.paths import find_recordings
+from ..io.style import ensure_style
 
 
 def plot_recording_comparison(
@@ -39,6 +41,7 @@ def plot_recording_comparison(
     manual_intervals: list[tuple[float, float]] | None = None,
     epoch_seconds: int = 10,
 ):
+    ensure_style()
     fig = plt.figure(figsize=(12, 7))
     from matplotlib.gridspec import GridSpec
 
@@ -203,8 +206,8 @@ def plot_detailed_comparison(
     somnotate_vec: np.ndarray,
     manual_vectors: dict[str, np.ndarray] | None = None,
     scorers: list[str] | None = None,
-    eeg_channel: int = 0,
-    view_length_s: float = 120.0,
+    eeg_channel: int = DEFAULT_EEG_CHANNEL,
+    view_length_s: float = DEFAULT_VIEW_LENGTH_S,
     emg_rms_window_s: float = 5.0,
     band_smoothing_window_s: float = 5.0,
     delta_band: tuple[float, float] = (0.5, 4.0),
@@ -223,6 +226,7 @@ def plot_detailed_comparison(
 
     Keyboard navigation (left/right etc.) is inherited from TimeSeriesStateViewer.
     """
+    ensure_style()
     time_resolution_s = time_resolution_s or configuration.time_resolution
     manual_vectors = dict(manual_vectors or {})
 
@@ -327,88 +331,12 @@ def plot_detailed_comparison(
     return fig, viewer
 
 
-def load_somnotate_vector(pred_path: Path) -> np.ndarray:
-    """Read a scoring predictions parquet into a model-label vector.
-
-    Prefers the `label_model` column; falls back to inverting MODEL_TO_OUTPUT_LABEL
-    on `label` for older prediction files that only stored output labels.
-    """
-    pred_df = pd.read_parquet(pred_path)
-    if "label_model" in pred_df.columns:
-        return pred_df["label_model"].to_numpy(dtype=int)
-    if "label" not in pred_df.columns:
-        raise ValueError(f"No 'label_model' or 'label' column in {pred_path}")
-    inverse_map = {value: key for key, value in MODEL_TO_OUTPUT_LABEL.items()}
-    return pred_df["label"].map(lambda v: inverse_map.get(int(v), 0)).to_numpy(dtype=int)
-
-
-def _load_recording_arrays(recording, channel_labels: list[str] | None = None):
-    """Load raw signals + somnotate label vector for one resolved recording.
-
-    Returns (raw_signals, somnotate_vec). Raises FileNotFoundError if the recording
-    has no somnotate predictions parquet yet.
-    """
-    channel_labels = channel_labels or DEFAULT_CHANNEL_LABELS
-    pred_path = recording.output_dir / f"{recording.edf_path.stem}_somnotate_predictions.parquet"
-    if not pred_path.exists():
-        raise FileNotFoundError(
-            f"No somnotate predictions at {pred_path}. Run score_recordings for this recording first."
-        )
-
-    # imported lazily: data_io pulls in EDF readers that are slow to import
-    from ..somnotate_pipeline.io.data_io import load_raw_signals
-
-    print(f"Loading {recording.edf_path.name}…")
-    raw_signals = load_raw_signals(str(recording.edf_path), channel_labels)
-    somnotate_vec = load_somnotate_vector(pred_path)
-    return raw_signals, somnotate_vec
-
-
-def _load_scored_recording(
-    subjid: int | str,
-    date: int | str,
-    repo_root: Path,
-    recording_index: int = 0,
-    channel_labels: list[str] | None = None,
-):
-    """Resolve a scored recording by subject/date and load its raw signals + labels.
-
-    Returns (recording, raw_signals, somnotate_vec). `recording_index` is clamped to
-    the valid range rather than raising, so an out-of-range index still shows a
-    recording. Raises if no recording or no predictions file exists.
-    """
-    repo_root = Path(repo_root)
-
-    recordings = find_recordings(repo_root, [subjid], dates=[date])
-    if not recordings:
-        raise ValueError(f"No recordings found for subject {subjid} on date {date}")
-
-    # Clamp rather than crash: an out-of-range index falls back to the nearest valid
-    # recording (so recording_index=3 on a subject/date with one recording still shows it).
-    clamped_index = min(max(recording_index, 0), len(recordings) - 1)
-    if clamped_index != recording_index:
-        print(
-            f"recording_index {recording_index} out of range "
-            f"({len(recordings)} recording(s) for subject {subjid} on date {date}); "
-            f"showing [{clamped_index}] instead."
-        )
-    recording = recordings[clamped_index]
-    if len(recordings) > 1:
-        print(
-            f"{len(recordings)} recordings for subject {subjid} on date {date}; "
-            f"showing [{clamped_index}] {recording.edf_path.name}"
-        )
-
-    raw_signals, somnotate_vec = _load_recording_arrays(recording, channel_labels)
-    return recording, raw_signals, somnotate_vec
-
-
 def plot_scoring_detailed(
     subjid: int | str,
     date: int | str,
     repo_root: Path,
     manual_vectors: dict[str, np.ndarray] | None = None,
-    recording_index: int = 0,
+    recording_index: int = DEFAULT_RECORDING_INDEX,
     channel_labels: list[str] | None = None,
     sampling_rate_hz: int = DEFAULT_SAMPLING_RATE_HZ,
     **plot_kwargs,
@@ -424,7 +352,7 @@ def plot_scoring_detailed(
     Extra keyword arguments (eeg_channel, view_length_s, delta_band, …) pass
     through to `plot_detailed_comparison`.
     """
-    recording, raw_signals, somnotate_vec = _load_scored_recording(
+    recording, raw_signals, somnotate_vec = load_scored_recording(
         subjid, date, repo_root,
         recording_index=recording_index,
         channel_labels=channel_labels,
@@ -652,7 +580,7 @@ def _render_state_raw_distribution_figure(
     default) pooled across all three states — so the states line up on a common axis and
     are directly comparable; Y is % of that state's epochs. `bin_width` is reused as a
     fraction of that p1–p99 range, so it yields the same bin count as the overlay
-    (0.1 → 10 bins). A dashed line marks each state's mean; μ/σ are printed in each title
+    (0.05 → 20 bins). A dashed line marks each state's mean; μ/σ are printed in each title
     so location and spread are readable directly. Epochs in the outer tails fall outside
     the plotted range (so bars sum to slightly under 100%). Returns a bare Figure (no
     pyplot / interactive backend).
@@ -713,10 +641,10 @@ def plot_state_distributions(
     subjid: int | str | list,
     date: int | str | list | None,
     repo_root: Path,
-    epoch_length_s: float = 10.0,
-    bin_width: float = 0.1,
+    epoch_length_s: float = DEFAULT_DISTRIBUTION_EPOCH_LENGTH_S,
+    bin_width: float = DEFAULT_DISTRIBUTION_BIN_WIDTH,
     show_raw_distributions: bool = True,
-    eeg_channel: int = 0,
+    eeg_channel: int = DEFAULT_EEG_CHANNEL,
     delta_band: tuple[float, float] = (0.5, 4.0),
     theta_band: tuple[float, float] = (6.0, 10.0),
     emg_band: tuple[float, float] = (10.0, 45.0),
@@ -748,7 +676,7 @@ def plot_state_distributions(
         one column per metric, showing each metric's raw values over that state's own
         1st–99th percentile range with a dashed mean line and μ/σ in the title, so the
         real location and spread per state are readable. `bin_width` is reused there as a
-        fraction of the p1–p99 range (0.1 → 10 bins).
+        fraction of the p1–p99 range (0.05 → 20 bins).
 
     Occupancy printed per session is the % of scored Wake/NREM/REM epochs (undefined
     excluded, so the three sum to 100%).
@@ -771,6 +699,8 @@ def plot_state_distributions(
     """
     if eeg_channel not in (0, 1):
         raise ValueError("eeg_channel must be 0 (EEG1) or 1 (EEG2)")
+
+    ensure_style()
 
     repo_root = Path(repo_root)
     subjids = _as_list(subjid)
@@ -797,7 +727,7 @@ def plot_state_distributions(
 
         for rec in recs:
             try:
-                raw_signals, somnotate_vec = _load_recording_arrays(rec, channel_labels)
+                raw_signals, somnotate_vec = load_recording_arrays(rec, channel_labels)
             except FileNotFoundError as exc:
                 warnings.warn(str(exc), UserWarning, stacklevel=2)
                 continue
@@ -866,12 +796,30 @@ def plot_state_distributions(
 
         saved_paths: list[Path] = []
         if save:
-            figures_dir.mkdir(parents=True, exist_ok=True)
+            # Routed through hypnose-analysis's save_figure so these PDFs match the
+            # figures every other Hypnose repo emits (style, dpi, fonttype). The
+            # session figures dir is passed explicitly: it is already resolved here
+            # from the recording, and it is more specific than a subject/date lookup.
+            from ..io.save import save_figure
+
+            # save_figure tags filenames from numeric subject ids (`int(s):03d`),
+            # whereas RecordingRef.subject is the label "sub-001" — pass the number
+            # so the tag round-trips to the same "sub-001" the old code wrote.
+            sub_digits = "".join(ch for ch in subject if ch.isdigit())
+            subj_tag_value = int(sub_digits) if sub_digits else subject
+
             to_save = [("norm", fig)] + ([("raw", raw_fig)] if raw_fig is not None else [])
             for suffix, f in to_save:
-                out_path = figures_dir / f"{save_name}_{suffix}_{subject}_date-{date_str}.pdf"
-                f.savefig(out_path, dpi=save_dpi, bbox_inches="tight")
-                saved_paths.append(out_path)
+                saved_paths.append(
+                    save_figure(
+                        f,
+                        f"{save_name}_{suffix}",
+                        subjids=subj_tag_value,
+                        dates=date_str,
+                        fig_dir=figures_dir,
+                        dpi=save_dpi,
+                    )
+                )
             print(f"Saved {len(saved_paths)} figure(s) to {figures_dir}")
 
         occupancy_pct = {

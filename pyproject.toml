@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hypnose-eeg-preprocessing"
-version = "0.1.0"
+version = "1.0.0"
 description = "Somnotate-based EEG preprocessing and scoring pipeline."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [{name = "Harris Lab"}]
+
+[project.scripts]
+hypnose-eeg-preprocess = "hypnose_eeg_preprocessing.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

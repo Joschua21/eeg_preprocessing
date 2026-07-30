@@ -5,4 +5,12 @@ Subpackages are imported by the caller (e.g.
 importing the top-level package stays cheap.
 """
 
-__version__ = "0.1.0"
+# Read from the installed package metadata so pyproject.toml stays the single source
+# of truth for the version. The fallback covers running from a checkout that has not
+# been installed (e.g. via PYTHONPATH).
+try:
+    from importlib.metadata import PackageNotFoundError, version as _version
+
+    __version__ = _version("hypnose-eeg-preprocessing")
+except (ImportError, PackageNotFoundError):  # pragma: no cover
+    __version__ = "unknown"

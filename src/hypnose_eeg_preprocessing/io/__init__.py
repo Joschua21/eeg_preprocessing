@@ -1,5 +1,23 @@
-"""Dataset discovery and data-location resolution."""
+"""Dataset discovery, data-location resolution, and readers for pipeline artifacts."""
 
+from .loading import (
+    SIGNAL_TABLE_SUFFIXES,
+    align_vectors,
+    find_somnotate_predictions,
+    get_csv_dir,
+    get_predictions_dir,
+    get_test_root,
+    list_csv_files,
+    load_aligned_vectors,
+    load_manual_vectors_from_csvs,
+    load_raw_signals_from_csv,
+    load_recording_arrays,
+    load_scored_recording,
+    load_signal_table,
+    load_somnotate_predictions,
+    load_somnotate_vector,
+    load_testing_csv,
+)
 from .paths import (
     RecordingRef,
     find_recordings,
@@ -10,8 +28,24 @@ from .paths import (
 
 __all__ = [
     "RecordingRef",
+    "SIGNAL_TABLE_SUFFIXES",
+    "align_vectors",
     "find_recordings",
+    "find_somnotate_predictions",
+    "get_csv_dir",
     "get_derivatives_root",
+    "get_predictions_dir",
     "get_raw_root",
+    "get_test_root",
+    "list_csv_files",
+    "load_aligned_vectors",
+    "load_manual_vectors_from_csvs",
+    "load_raw_signals_from_csv",
+    "load_recording_arrays",
+    "load_scored_recording",
+    "load_signal_table",
+    "load_somnotate_predictions",
+    "load_somnotate_vector",
+    "load_testing_csv",
     "normalize_subjid",
 ]
