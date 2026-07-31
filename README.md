@@ -1,13 +1,11 @@
-# hypnose-eeg-preprocessing
+# hypnose-somnotate
 
-Somnotate-based EEG preprocessing and scoring pipeline. Importable as
-`hypnose_eeg_preprocessing`; intended to be consumed as the preprocessing submodule of
-`hypnose-eeg-analysis`.
+Somnotate-based EEG sleep scoring pipeline. Importable as `hypnose_somnotate`.
 
 ## Layout
 
 ```
-src/hypnose_eeg_preprocessing/
+src/hypnose_somnotate/
 ├── config.py               # sampling rates, channel labels, state-label maps
 ├── io/
 │   ├── paths.py            # dataset discovery + data-location resolution
@@ -32,10 +30,10 @@ notebooks/
 Each subpackage re-exports its public API, so the import path stays flat:
 
 ```python
-from hypnose_eeg_preprocessing.scoring import score_recordings
-from hypnose_eeg_preprocessing.training import run_training
-from hypnose_eeg_preprocessing.preprocessing import prepare_recording
-from hypnose_eeg_preprocessing.visualization import plot_scoring_detailed
+from hypnose_somnotate.scoring import score_recordings
+from hypnose_somnotate.training import run_training
+from hypnose_somnotate.preprocessing import prepare_recording
+from hypnose_somnotate.visualization import plot_scoring_detailed
 ```
 
 All disk reads live in `io/loading.py` — path resolution, directory iteration, and
@@ -44,7 +42,7 @@ parsing of the files the pipeline writes. It depends only on `io/paths.py` and
 selector-driven entry point is:
 
 ```python
-from hypnose_eeg_preprocessing.io import load_scored_recording
+from hypnose_somnotate.io import load_scored_recording
 recording, raw_signals, somnotate_vec = load_scored_recording(sub, date, repo_root)
 ```
 
@@ -61,11 +59,11 @@ shared figure styles. Install both into one conda env:
    ```
 
 2. From **this** repo's root, create and activate the env. This installs
-   hypnose-eeg-preprocessing itself (`-e .` is the last line of `environment.yml`),
+   hypnose-somnotate itself (`-e .` is the last line of `environment.yml`),
    so no separate install is needed:
    ```bash
    conda env create -f environment.yml
-   conda activate hypnose-eeg-preprocessing
+   conda activate hypnose-somnotate
    ```
 
 3. Install hypnose-analysis into the env, from its main folder:
@@ -75,24 +73,25 @@ shared figure styles. Install both into one conda env:
    cd -
    ```
    Use the **base** install — no `[behavioral]` extra. This repo needs only
-   `hypnose.io.paths` and `hypnose.io.save`; the behavioural stack pins `swc-aeon`,
-   which requires Python ≥3.11 and cannot install here (this repo is pinned to 3.9
-   by pomegranate).
+   `hypnose.io.paths` and `hypnose.io.save`; the behavioural stack (`swc-aeon`,
+   `harp-python`, `moviepy`, `opencv-python`) is for behavioural data and video and
+   is never imported here.
 
 4. Register the Jupyter kernel:
    ```bash
-   python -m ipykernel install --user --name hypnose-eeg-preprocessing \
-       --display-name "Python (hypnose-eeg-preprocessing)"
+   python -m ipykernel install --user --name hypnose-somnotate \
+       --display-name "Python (hypnose-somnotate)"
    ```
 
 5. Check it worked:
    ```bash
-   hypnose-eeg-preprocess --help
+   hypnose-somnotate --help
    ```
 
-> **Reusing an older env** (e.g. `eeg_preprocessing` from before the rename)?
-> Run `pip install -e .` in it by hand — the old editable install still points at
-> the pre-restructure `utils/` layout and will not import.
+> **Reusing an older env** (this repo was previously `eeg_preprocessing`, then
+> `hypnose-eeg-preprocessing`). Run `pip install -e .` in it by hand — an editable
+> install from before a rename still points at the old package name and will not
+> import.
 
 ### 2. Set the data location
 
@@ -137,20 +136,20 @@ Point directly at the EEG roots with env vars — no profile, no server-root con
 **2a. Set them in the conda env (recommended — works however the kernel is launched,
 including VS Code from the Dock):**
 ```bash
-conda activate hypnose-eeg-preprocessing
+conda activate hypnose-somnotate
 conda env config vars set \
   HYPNOSE_EEG_RAWDATA_ROOT=/path/to/eeg/rawdata \
   HYPNOSE_EEG_DERIVATIVES_ROOT=/path/to/eeg/derivatives
-conda deactivate && conda activate hypnose-eeg-preprocessing   # reactivate to apply
+conda deactivate && conda activate hypnose-somnotate   # reactivate to apply
 conda env config vars list                                      # verify
 ```
 Test (from anywhere, once the package is installed):
 ```bash
-python -c "from hypnose_eeg_preprocessing.io import get_derivatives_root; print(get_derivatives_root())"
+python -c "from hypnose_somnotate.io import get_derivatives_root; print(get_derivatives_root())"
 ```
 It should print your EEG derivatives path.
 
-**2b. Or set them per notebook — first cell, before importing `hypnose_eeg_preprocessing`:**
+**2b. Or set them per notebook — first cell, before importing `hypnose_somnotate`:**
 ```python
 import os
 os.environ["HYPNOSE_EEG_RAWDATA_ROOT"] = "/path/to/eeg/rawdata"
@@ -168,14 +167,14 @@ machine-specific paths into a shared notebook.
 
 ## CLI
 
-Installed as `hypnose-eeg-preprocess`; also runnable as
-`python -m hypnose_eeg_preprocessing.cli` from a checkout.
+Installed as `hypnose-somnotate`; also runnable as
+`python -m hypnose_somnotate.cli` from a checkout.
 
 ```
-hypnose-eeg-preprocess train         Train a somnotate model from labelled MAT files
-hypnose-eeg-preprocess score         Score recordings with a trained model
-hypnose-eeg-preprocess view          Open the detailed viewer for one scored session
-hypnose-eeg-preprocess distribution  Save state-distribution figures
+hypnose-somnotate train         Train a somnotate model from labelled MAT files
+hypnose-somnotate score         Score recordings with a trained model
+hypnose-somnotate view          Open the detailed viewer for one scored session
+hypnose-somnotate distribution  Save state-distribution figures
 ```
 
 ### Selectors
@@ -194,8 +193,8 @@ Omit `--date`/`--date-range` to select every session for those subjects.
 ### Training
 
 ```bash
-hypnose-eeg-preprocess train my-model
-hypnose-eeg-preprocess train my-model --input-dir cohort-a
+hypnose-somnotate train my-model
+hypnose-somnotate train my-model --input-dir cohort-a
 ```
 
 The model name is also the output directory
@@ -209,11 +208,11 @@ separately.
 ### Scoring
 
 ```bash
-hypnose-eeg-preprocess score --model my-model --sub 66
-hypnose-eeg-preprocess score --model my-model --sub 066,067 --date 20260707
-hypnose-eeg-preprocess score --model my-model --sub 66 \
+hypnose-somnotate score --model my-model --sub 66
+hypnose-somnotate score --model my-model --sub 066,067 --date 20260707
+hypnose-somnotate score --model my-model --sub 66 \
     --date-range 20260707-20260718 --save-distribution
-hypnose-eeg-preprocess score --model my-model --sub 66 --date 20260707 --show-viewer
+hypnose-somnotate score --model my-model --sub 66 --date 20260707 --show-viewer
 ```
 
 `--model` accepts a model name, a model directory, or a path to `model.pickle`.
@@ -232,8 +231,8 @@ and works across any number of subjects/dates. Tune it with `--epoch-length`,
 Both views also run on their own against predictions already on disk:
 
 ```bash
-hypnose-eeg-preprocess view --sub 66 --date 20260707
-hypnose-eeg-preprocess distribution --sub 66,67 --date-range 20260707-20260718
+hypnose-somnotate view --sub 66 --date 20260707
+hypnose-somnotate distribution --sub 66,67 --date-range 20260707-20260718
 ```
 
 ### From Python
@@ -242,7 +241,7 @@ Each command is importable, so hypnose-eeg-analysis can drive the pipeline
 in-process rather than shelling out:
 
 ```python
-from hypnose_eeg_preprocessing.cli import score
+from hypnose_somnotate.cli import score
 score(["--model", "my-model", "--sub", "66", "--save-distribution"])
 ```
 
@@ -257,7 +256,7 @@ tidy DataFrame, reading only the predictions parquet (never the EDF), so it is f
 enough to call across a whole cohort.
 
 ```python
-from hypnose_eeg_preprocessing.io import load_scores
+from hypnose_somnotate.io import load_scores
 
 df = load_scores(66, date=20260707)          # one session
 df = load_scores([66, 67, 68])               # several animals, all their dates
@@ -307,7 +306,7 @@ mistaken for "no sleep found".
 Two companions:
 
 ```python
-from hypnose_eeg_preprocessing.io import find_scored, load_segments
+from hypnose_somnotate.io import find_scored, load_segments
 
 find_scored(66)                        # what exists on disk, without reading it
 find_scored(66, scored_only=False)     # ...including what still needs scoring
@@ -329,7 +328,7 @@ look. `config.DEFAULT_FIGURE_STYLE` selects it (`"nature"`, `"poster"`,
 kernel, or switch for one session:
 
 ```python
-from hypnose_eeg_preprocessing.io.style import ensure_style
+from hypnose_somnotate.io.style import ensure_style
 ensure_style("presentation", force=True)
 ```
 

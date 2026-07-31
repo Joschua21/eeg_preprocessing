@@ -1,9 +1,9 @@
-"""Command-line interface for hypnose-eeg-preprocessing.
+"""Command-line interface for hypnose-somnotate.
 
 Every command is also importable as a function, so hypnose-eeg-analysis can drive
 the pipeline in-process without shelling out::
 
-    from hypnose_eeg_preprocessing.cli import score
+    from hypnose_somnotate.cli import score
     score(["--model", "my-model", "--sub", "66"])
 
 Submodules are imported lazily so `--help` on one command does not pay for the
@@ -50,12 +50,12 @@ COMMANDS = {
 def _usage() -> str:
     width = max(len(name) for name in COMMANDS)
     lines = [
-        "usage: hypnose-eeg-preprocess <command> [options]",
+        "usage: hypnose-somnotate <command> [options]",
         "",
         "commands:",
     ]
     lines += [f"  {name:<{width}}  {help_}" for name, (_, help_) in COMMANDS.items()]
-    lines += ["", "Run 'hypnose-eeg-preprocess <command> --help' for command options."]
+    lines += ["", "Run 'hypnose-somnotate <command> --help' for command options."]
     return "\n".join(lines)
 
 
@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv[0] in ("-V", "--version"):
         from .. import __version__
 
-        print(f"hypnose-eeg-preprocessing {__version__}")
+        print(f"hypnose-somnotate {__version__}")
         return 0
 
     command = argv[0]

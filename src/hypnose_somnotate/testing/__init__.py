@@ -1,6 +1,6 @@
 """Validation of automated scoring against manual annotations.
 
-The loaders below now live in `hypnose_eeg_preprocessing.io.loading`; they are
+The loaders below now live in `hypnose_somnotate.io.loading`; they are
 re-exported here so existing `from …testing import load_…` callers keep working.
 """
 

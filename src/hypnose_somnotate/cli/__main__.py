@@ -1,4 +1,4 @@
-"""Entry point for `python -m hypnose_eeg_preprocessing.cli`.
+"""Entry point for `python -m hypnose_somnotate.cli`.
 
 Guarded so that merely *importing* this module does not run the CLI — otherwise
 anything that walks the package (pkgutil.walk_packages, doc builders, test

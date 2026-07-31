@@ -40,7 +40,7 @@ def normalize_data(data):
 
 if __name__ == '__main__':
 
-    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
+    from hypnose_somnotate.somnotate_pipeline.utils.configuration import (
         state_to_int,
         int_to_state,
         time_resolution,
@@ -156,9 +156,9 @@ if __name__ == '__main__':
 
         if args.show:
 
-            from hypnose_eeg_preprocessing.somnotate_pipeline.io.data_io import load_raw_signals
+            from hypnose_somnotate.somnotate_pipeline.io.data_io import load_raw_signals
 
-            from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
+            from hypnose_somnotate.somnotate_pipeline.utils.configuration import (
                 plot_raw_signals,
                 state_annotation_signals,
                 plot_states,

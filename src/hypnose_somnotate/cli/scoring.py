@@ -1,4 +1,4 @@
-"""`hypnose-eeg-preprocess score` — score recordings with a trained somnotate model.
+"""`hypnose-somnotate score` — score recordings with a trained somnotate model.
 
 Also hosts the two post-scoring views, which are reachable either as flags here
 (`--show-viewer`, `--save-distribution`) or as standalone commands (`view`,
@@ -150,16 +150,16 @@ def _select_viewer_session(sessions: list[tuple[int, str]]) -> tuple[int, str] |
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hypnose-eeg-preprocess score",
+        prog="hypnose-somnotate score",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            "  hypnose-eeg-preprocess score --model my-model --sub 66\n"
-            "  hypnose-eeg-preprocess score --model my-model --sub 066,067 --date 20260707\n"
-            "  hypnose-eeg-preprocess score --model my-model --sub 66 "
+            "  hypnose-somnotate score --model my-model --sub 66\n"
+            "  hypnose-somnotate score --model my-model --sub 066,067 --date 20260707\n"
+            "  hypnose-somnotate score --model my-model --sub 66 "
             "--date-range 20260707-20260718 --save-distribution\n"
-            "  hypnose-eeg-preprocess score --model my-model --sub 66 --date 20260707 --show-viewer\n"
+            "  hypnose-somnotate score --model my-model --sub 66 --date 20260707 --show-viewer\n"
         ),
     )
     parser.add_argument(

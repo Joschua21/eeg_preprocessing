@@ -20,7 +20,7 @@ from ...somnotate._automated_state_annotation import StateAnnotator
 
 if __name__ == '__main__':
 
-    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import state_to_int, time_resolution
+    from hypnose_somnotate.somnotate_pipeline.utils.configuration import state_to_int, time_resolution
 
     parser = ArgumentParser()
     parser.add_argument("spreadsheet_file_path", help="Use datasets specified in /path/to/spreadsheet.csv")

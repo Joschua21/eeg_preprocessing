@@ -1,7 +1,7 @@
-"""hypnose-eeg-preprocessing --- Somnotate-based EEG preprocessing and scoring pipeline.
+"""hypnose-somnotate --- Somnotate-based EEG preprocessing and scoring pipeline.
 
 Subpackages are imported by the caller (e.g.
-``from hypnose_eeg_preprocessing.scoring import score_recordings``) so that
+``from hypnose_somnotate.scoring import score_recordings``) so that
 importing the top-level package stays cheap.
 """
 
@@ -11,6 +11,6 @@ importing the top-level package stays cheap.
 try:
     from importlib.metadata import PackageNotFoundError, version as _version
 
-    __version__ = _version("hypnose-eeg-preprocessing")
+    __version__ = _version("hypnose-somnotate")
 except (ImportError, PackageNotFoundError):  # pragma: no cover
     __version__ = "unknown"

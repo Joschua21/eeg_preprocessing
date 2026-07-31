@@ -1,4 +1,4 @@
-"""`hypnose-eeg-preprocess view` — open the detailed viewer for one scored session.
+"""`hypnose-somnotate view` — open the detailed viewer for one scored session.
 
 Reads predictions already written by `score`; it does not score anything. Exactly
 one subject and one date must resolve, since the viewer shows a single recording.
@@ -16,13 +16,13 @@ from .scoring import add_viewer_arguments, run_viewer
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hypnose-eeg-preprocess view",
+        prog="hypnose-somnotate view",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            "  hypnose-eeg-preprocess view --sub 66 --date 20260707\n"
-            "  hypnose-eeg-preprocess view --sub 066 --date 20260707 "
+            "  hypnose-somnotate view --sub 66 --date 20260707\n"
+            "  hypnose-somnotate view --sub 066 --date 20260707 "
             "--eeg-channel 1 --view-length 60\n"
         ),
     )

@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hypnose-eeg-preprocessing"
+name = "hypnose-somnotate"
 version = "1.0.0"
 description = "Somnotate-based EEG preprocessing and scoring pipeline."
 readme = "README.md"
@@ -34,8 +34,8 @@ dependencies = [
 ]
 
 [project.scripts]
-hypnose-eeg-preprocess = "hypnose_eeg_preprocessing.cli:main"
+hypnose-somnotate = "hypnose_somnotate.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["hypnose_eeg_preprocessing*"]
+include = ["hypnose_somnotate*"]

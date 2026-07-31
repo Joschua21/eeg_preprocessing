@@ -114,7 +114,7 @@ def preprocess(raw_signal, sampling_frequency_in_hz,
 
 if __name__ == '__main__':
 
-    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
+    from hypnose_somnotate.somnotate_pipeline.utils.configuration import (
         time_resolution,
         state_annotation_signals,
         plot_raw_signals,

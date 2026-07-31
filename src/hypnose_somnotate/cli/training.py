@@ -1,4 +1,4 @@
-"""`hypnose-eeg-preprocess train` — train a somnotate model from labelled MAT files.
+"""`hypnose-somnotate train` — train a somnotate model from labelled MAT files.
 
 The model name is the primary argument: it names the output directory under
 `derivatives/somnotate_training/<model_name>/`, so it is also the handle
@@ -48,14 +48,14 @@ def resolve_input_dir(input_dir: str | Path | None, repo_root: Path | None = Non
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hypnose-eeg-preprocess train",
+        prog="hypnose-somnotate train",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            "  hypnose-eeg-preprocess train my-model\n"
-            "  hypnose-eeg-preprocess train my-model --input-dir cohort-a\n"
-            "  hypnose-eeg-preprocess train my-model --show-plots\n"
+            "  hypnose-somnotate train my-model\n"
+            "  hypnose-somnotate train my-model --input-dir cohort-a\n"
+            "  hypnose-somnotate train my-model --show-plots\n"
         ),
     )
     parser.add_argument(

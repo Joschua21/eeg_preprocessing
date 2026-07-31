@@ -1,4 +1,4 @@
-name: hypnose-eeg-preprocessing
+name: hypnose-somnotate
 #
 # Python 3.12. pomegranate<1.0.0 (which the vendored somnotate relies on) publishes
 # no wheels, so pip builds it from source — but it builds and runs fine on 3.12, and

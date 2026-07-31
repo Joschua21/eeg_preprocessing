@@ -1,6 +1,6 @@
 """Plotting of scored recordings and manual/automated comparisons.
 
-`load_somnotate_vector` now lives in `hypnose_eeg_preprocessing.io.loading`; it is
+`load_somnotate_vector` now lives in `hypnose_somnotate.io.loading`; it is
 re-exported here so existing callers keep working.
 """
 

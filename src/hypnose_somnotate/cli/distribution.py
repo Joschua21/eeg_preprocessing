@@ -1,4 +1,4 @@
-"""`hypnose-eeg-preprocess distribution` — save state-distribution figures.
+"""`hypnose-somnotate distribution` — save state-distribution figures.
 
 Reads predictions already written by `score` and writes the per-state metric
 distributions into each session's `figures/` directory. Any number of subjects and
@@ -18,14 +18,14 @@ from .scoring import add_distribution_arguments, run_distributions
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hypnose-eeg-preprocess distribution",
+        prog="hypnose-somnotate distribution",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            "  hypnose-eeg-preprocess distribution --sub 66\n"
-            "  hypnose-eeg-preprocess distribution --sub 66,67 --date-range 20260707-20260718\n"
-            "  hypnose-eeg-preprocess distribution --sub 66 --date 20260707 --epoch-length 10\n"
+            "  hypnose-somnotate distribution --sub 66\n"
+            "  hypnose-somnotate distribution --sub 66,67 --date-range 20260707-20260718\n"
+            "  hypnose-somnotate distribution --sub 66 --date 20260707 --epoch-length 10\n"
         ),
     )
     add_selector_arguments(parser)

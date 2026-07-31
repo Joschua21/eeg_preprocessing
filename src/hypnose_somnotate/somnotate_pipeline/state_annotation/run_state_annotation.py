@@ -63,7 +63,7 @@ def _get_score(vec):
 
 if __name__ == '__main__':
 
-    from hypnose_eeg_preprocessing.somnotate_pipeline.utils.configuration import (
+    from hypnose_somnotate.somnotate_pipeline.utils.configuration import (
         state_to_int,
         int_to_state,
         plot_raw_signals,
