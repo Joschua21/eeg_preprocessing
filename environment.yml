@@ -1,15 +1,32 @@
 name: hypnose-eeg-preprocessing
-# Pinned to the versions known to work in `somnotate_env` as of 2026-06.
-# Python is held at 3.9 because pomegranate<1.0.0 (which somnotate relies on)
-# does not support newer Python. Upgrading Python means replacing pomegranate,
-# which is a much larger change.
+#
+# Python 3.12. pomegranate<1.0.0 (which the vendored somnotate relies on) publishes
+# no wheels, so pip builds it from source — but it builds and runs fine on 3.12, and
+# scoring was verified byte-identical to the 3.9 build (7200/7200 epochs on a real
+# recording, same model.pickle). An earlier note here claimed 3.9 was required; that
+# was wrong, it was only ever the absence of wheels.
+#
+# REQUIRES A C COMPILER. Because pomegranate compiles from source, this env cannot be
+# created on a machine without a working toolchain:
+#   macOS  — xcode-select --install
+#   Linux  — gcc/g++ (e.g. build-essential)
+# Without it, `conda env create` fails with a compiler error, not a missing package.
+#
+# Two pins are load-bearing:
+#   numpy<2            — required by pomegranate itself, not by Python 3.12.
+#   scikit-learn==1.6.1 — trained models pickle an LDA transformer; loading it under a
+#                        different sklearn emits InconsistentVersionWarning and is not
+#                        guaranteed to reproduce. Retrain if you move this pin.
+#
+# 3.12 (not newer) because hypnose-analysis declares requires-python <3.13, and these
+# two are installed side by side.
 channels:
   - defaults
 dependencies:
-  - python=3.9
+  - python=3.12
   - pip
   - pip:
-    - "numpy<2"
+    - "numpy<2"           # pomegranate requires numpy<2.0,>=1.20.0
     - "pandas>=2.0,<3"
     - "scipy>=1.13,<2"
 
@@ -18,12 +35,12 @@ dependencies:
     - seaborn
     - ipympl
 
-    - "pyarrow>=15"
+    - "pyarrow>=20"       # older pyarrow cannot read format-2.6 files written by pyarrow 21+
     - fastparquet
 
     # ML / signal-processing
-    - "scikit-learn>=1.5"
-    - "pomegranate<1.0.0"   # API used by the vendored somnotate code
+    - "scikit-learn==1.6.1"  # must match the version models were trained with
+    - "pomegranate<1.0.0"    # API used by the vendored somnotate code; source build
 
     - pyedflib
     - edfio

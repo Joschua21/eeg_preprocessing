@@ -19,7 +19,7 @@ from ._args import add_repo_root_argument
 from ._common import (
     MODEL_FILENAME,
     get_model_dir,
-    get_training_root,
+    get_training_input_root,
     list_models,
     model_exists,
 )
@@ -28,18 +28,22 @@ from ._common import (
 def resolve_input_dir(input_dir: str | Path | None, repo_root: Path | None = None) -> Path:
     """Directory holding the labelled .mat files to train on.
 
-    Without `--input-dir` the training root itself is used, which is the layout
-    that existed before this flag. With it, training reads from
-    `somnotate_training/<input_dir>/`, so several labelled sets can live side by
-    side and be trained separately. An absolute path is honoured as given.
+    Resolved against `<eeg root>/somnotate_training/` — the *input* tree — not
+    `derivatives/somnotate_training/`, which is where trained models are written.
+    The two share a name but are different directories.
+
+    Without `--input-dir` the input root itself is used, which is the layout that
+    existed before this flag. With it, training reads from
+    `<eeg root>/somnotate_training/<input_dir>/`, so several labelled sets can live
+    side by side and be trained separately. An absolute path is honoured as given.
     """
-    training_root = get_training_root(repo_root)
+    input_root = get_training_input_root(repo_root)
     if input_dir is None:
-        return training_root
+        return input_root
     candidate = Path(input_dir)
     if candidate.is_absolute():
         return candidate
-    return training_root / candidate
+    return input_root / candidate
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,8 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--input-dir", metavar="DIR",
-        help="Labelled .mat files to train on, relative to somnotate_training/ "
-             "(or an absolute path). Default: somnotate_training/ itself.",
+        help="Labelled .mat files to train on, relative to "
+             "<eeg root>/somnotate_training/ (or an absolute path). "
+             "Default: that directory itself.",
     )
     parser.add_argument(
         "--force", action="store_true",

@@ -122,6 +122,41 @@ def _resolve_data_root(subdir: str, repo_root: Path | None) -> Path:
     )
 
 
+def get_eeg_root(repo_root: Path | None = None) -> Path:
+    """Root of the EEG dataset — the directory containing `rawdata/`, `derivatives/`
+    and `somnotate_training/`.
+
+    Needed because not everything lives under `derivatives/`: trained models are
+    written to `derivatives/somnotate_training/<model>/`, but the labelled `.mat`
+    files they are trained *from* sit at `<eeg root>/somnotate_training/`. Those are
+    two different directories that happen to share a name.
+
+    Resolution mirrors `_resolve_data_root`, env vars first:
+    `HYPNOSE_EEG_ROOT` → parent of `HYPNOSE_EEG_RAWDATA_ROOT` → hypnose-analysis
+    profile → the legacy `data/hypnose_eeg` symlink.
+    """
+    explicit = os.getenv("HYPNOSE_EEG_ROOT")
+    if explicit:
+        return Path(os.path.expanduser(os.path.expandvars(explicit))).resolve()
+
+    raw_env = _env_root("rawdata")
+    if raw_env is not None:
+        return raw_env.parent
+
+    shared = _shared_eeg_root()
+    if shared is not None:
+        return shared.resolve()
+
+    if repo_root is not None:
+        return (Path(repo_root) / DATA_SYMLINK).resolve()
+
+    raise FileNotFoundError(
+        "Cannot resolve the EEG dataset root: no HYPNOSE_EEG_ROOT or "
+        "HYPNOSE_EEG_RAWDATA_ROOT env var, no active hypnose-analysis data-location "
+        "profile, and no repo_root for the symlink fallback."
+    )
+
+
 def get_raw_root(repo_root: Path | None = None) -> Path:
     return _resolve_data_root("rawdata", repo_root)
 

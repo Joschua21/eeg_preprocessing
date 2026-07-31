@@ -26,7 +26,7 @@ def _generate_edf_and_visbrain(csv_dir: Path, edf_dir: Path, ann_dir: Path, samp
     edf_dir.mkdir(parents=True, exist_ok=True)
     ann_dir.mkdir(parents=True, exist_ok=True)
 
-    from ..testing.testing import list_csv_files, load_signal_table
+    from ..io.loading import list_csv_files, load_signal_table
 
     edf_paths: list[Path] = []
     for csv_path in list_csv_files(csv_dir):

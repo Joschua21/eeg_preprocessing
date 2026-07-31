@@ -5,20 +5,32 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..io.paths import get_derivatives_root
+from ..io.paths import get_derivatives_root, get_eeg_root
 
 TRAINING_SUBDIR = "somnotate_training"
 MODEL_FILENAME = "model.pickle"
 
 
-def get_training_root(repo_root: Path | None = None) -> Path:
-    """Root holding both training inputs and per-model outputs."""
+# `somnotate_training` names two different directories, which is easy to conflate:
+#
+#   <eeg root>/somnotate_training/               labelled .mat files to train FROM
+#   <eeg root>/derivatives/somnotate_training/   trained models written TO
+#
+# They are kept as separate functions with explicit names for that reason.
+
+def get_training_input_root(repo_root: Path | None = None) -> Path:
+    """Directory holding the labelled `.mat` files that training reads."""
+    return get_eeg_root(repo_root) / TRAINING_SUBDIR
+
+
+def get_model_root(repo_root: Path | None = None) -> Path:
+    """Directory under derivatives where trained models are written."""
     return get_derivatives_root(repo_root) / TRAINING_SUBDIR
 
 
 def get_model_dir(model_name: str, repo_root: Path | None = None) -> Path:
     """Output directory for `model_name`."""
-    return get_training_root(repo_root) / model_name
+    return get_model_root(repo_root) / model_name
 
 
 def model_exists(model_name: str, repo_root: Path | None = None) -> bool:
@@ -27,7 +39,7 @@ def model_exists(model_name: str, repo_root: Path | None = None) -> bool:
 
 def list_models(repo_root: Path | None = None) -> list[str]:
     """Names of every trained model under the training root."""
-    training_root = get_training_root(repo_root)
+    training_root = get_model_root(repo_root)
     if not training_root.exists():
         return []
     return sorted(
@@ -57,7 +69,7 @@ def resolve_model_path(model: str | Path, repo_root: Path | None = None) -> Path
 
     known = list_models(repo_root)
     hint = f"\nAvailable models: {', '.join(known)}" if known else (
-        f"\nNo trained models found under {get_training_root(repo_root)}."
+        f"\nNo trained models found under {get_model_root(repo_root)}."
     )
     raise argparse.ArgumentTypeError(f"Could not resolve model {model!r}.{hint}")
 

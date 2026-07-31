@@ -11,6 +11,28 @@ requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [{name = "Harris Lab"}]
 
+# Only what the *read* layer needs: `io.load_scores` and friends, so a downstream
+# analysis env can install this package and load scored data without inheriting the
+# somnotate stack. Deliberately unpinned at the top end — Python 3.9, numpy<2 and
+# pomegranate are requirements of *running* somnotate and live in environment.yml,
+# not of importing this package.
+#
+# Training/scoring/testing/plotting additionally need pomegranate, pyedflib, h5py,
+# scipy, scikit-learn, mne and matplotlib; use environment.yml for those.
+dependencies = [
+    "numpy",
+    "pandas>=2.0",
+    # Scoring writes parquet format 2.6 with pyarrow 21+; pyarrow 19 fails to read it
+    # ("Repetition level histogram size mismatch").
+    "pyarrow>=20",
+    # Needed together, not individually: `load_scores(columns=...)` that omits time_s
+    # falls back to somnotate's configuration.py for the epoch duration, and that
+    # module imports matplotlib.pyplot *and* scipy.signal. Downstream analysis wants
+    # both anyway.
+    "matplotlib",
+    "scipy",
+]
+
 [project.scripts]
 hypnose-eeg-preprocess = "hypnose_eeg_preprocessing.cli:main"
 
