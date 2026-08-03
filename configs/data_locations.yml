@@ -17,6 +17,10 @@
 # it derived the EEG root from the behavioural profile's server_root; owning these
 # profiles is what makes hypnose-somnotate installable with hypnose-helpers alone.
 
+# Override env vars for this dataset are HYPNOSE_EEG_*, not HYPNOSE_* -- declared here so
+# `hypnose-set-data-location` reports the same roots the library resolves.
+env_prefix: HYPNOSE_EEG
+
 default_active: null    # optional fallback profile when no local override is set
 
 profiles:
