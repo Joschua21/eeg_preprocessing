@@ -50,12 +50,12 @@ recording, raw_signals, somnotate_vec = load_scored_recording(sub, date, repo_ro
 
 ### 1. Environment
 
-This pipeline uses **hypnose-analysis** for data-location resolution and for the
+This pipeline uses **hypnose-behavior-analysis** for data-location resolution and for the
 shared figure styles. Install both into one conda env:
 
-1. Clone hypnose-analysis (anywhere; a sibling folder is convenient):
+1. Clone hypnose-behavior-analysis (anywhere; a sibling folder is convenient):
    ```bash
-   git clone https://github.com/SainsburyWellcomeCentre/hypnose-analysis.git
+   git clone https://github.com/SainsburyWellcomeCentre/hypnose-behavior-analysis.git
    ```
 
 2. From **this** repo's root, create and activate the env. This installs
@@ -66,14 +66,14 @@ shared figure styles. Install both into one conda env:
    conda activate hypnose-somnotate
    ```
 
-3. Install hypnose-analysis into the env, from its main folder:
+3. Install hypnose-behavior-analysis into the env, from its main folder:
    ```bash
-   cd /path/to/hypnose-analysis
+   cd /path/to/hypnose-behavior-analysis
    pip install -e .
    cd -
    ```
    Use the **base** install — no `[behavioral]` extra. This repo needs only
-   `hypnose.io.paths` and `hypnose.io.save`; the behavioural stack (`swc-aeon`,
+   `hypnose_behavior.io.paths` and `hypnose_behavior.io.save`; the behavioural stack (`swc-aeon`,
    `harp-python`, `moviepy`, `opencv-python`) is for behavioural data and video and
    is never imported here.
 
@@ -96,10 +96,10 @@ shared figure styles. Install both into one conda env:
 ### 2. Set the data location
 
 The pipeline finds the EEG dataset's `rawdata/` and `derivatives/`
-(`…/hypnose_eeg/{rawdata,derivatives}`) through hypnose-analysis's data-location system —
+(`…/hypnose_eeg/{rawdata,derivatives}`) through hypnose-behavior-analysis's data-location system —
 no symlink needed. Resolution priority:
 
-`HYPNOSE_EEG_*` env vars → active hypnose-analysis profile (`server_root/hypnose_eeg`) →
+`HYPNOSE_EEG_*` env vars → active hypnose-behavior-analysis profile (`server_root/hypnose_eeg`) →
 legacy `data/hypnose_eeg` symlink (fallback only).
 
 Pick the option that matches your machine.
@@ -115,13 +115,13 @@ If your disk looks like:
     ├── rawdata/      # EEG
     └── derivatives/  # EEG
 ```
-add a profile to hypnose-analysis's `configs/data_locations.yml`:
+add a profile to hypnose-behavior-analysis's `configs/data_locations.yml`:
 ```yaml
   my-machine:
     rawdata: /path/to/hypnose/rawdata #behavioral 
     derivatives: /path/to/hypnose/derivatives #behavioral 
 ```
-then activate it from the hypnose-analysis repo:
+then activate it from the hypnose-behavior-analysis repo:
 ```bash
 python scripts/set_data_location.py my-machine
 python scripts/set_data_location.py --show      # verify resolved roots
@@ -322,7 +322,7 @@ control rather than one concatenated frame.
 
 ## Figure styles
 
-Figures are styled by hypnose-analysis so every Hypnose repo produces the same
+Figures are styled by hypnose-behavior-analysis so every Hypnose repo produces the same
 look. `config.DEFAULT_FIGURE_STYLE` selects it (`"nature"`, `"poster"`,
 `"presentation"`, or `None` to leave matplotlib alone); edit it and restart the
 kernel, or switch for one session:
@@ -334,5 +334,5 @@ ensure_style("presentation", force=True)
 
 The style is applied when a figure is created, never at import, so importing this
 package does not touch your rcParams and the result does not depend on import
-order. If hypnose-analysis is not installed, plots render unstyled and only
+order. If hypnose-behavior-analysis is not installed, plots render unstyled and only
 figure *saving* raises.

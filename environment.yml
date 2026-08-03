@@ -18,7 +18,7 @@ name: hypnose-somnotate
 #                        different sklearn emits InconsistentVersionWarning and is not
 #                        guaranteed to reproduce. Retrain if you move this pin.
 #
-# 3.12 (not newer) because hypnose-analysis declares requires-python <3.13, and these
+# 3.12 (not newer) because hypnose-behavior-analysis declares requires-python <3.13, and these
 # two are installed side by side.
 channels:
   - defaults

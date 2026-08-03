@@ -1,17 +1,17 @@
 """Figure saving for the EEG derivatives tree.
 
-Saving and styling both live in hypnose-analysis (`hypnose.io.save`) so that every
+Saving and styling both live in hypnose-behavior-analysis (`hypnose_behavior.io.save`) so that every
 Hypnose repo emits figures that look the same. Only the *destination* differs: the
 EEG derivatives tree is laid out as
 
     derivatives/sub-XXX/ses-YY_date-YYYYMMDD/figures/
 
-whereas hypnose-analysis resolves against the behavioural tree. Rather than wrap
-`save_figure`, this module registers `resolve_eeg_figure_dir` with hypnose-analysis
+whereas hypnose-behavior-analysis resolves against the behavioural tree. Rather than wrap
+`save_figure`, this module registers `resolve_eeg_figure_dir` with hypnose-behavior-analysis
 once at import; `save_figure` then routes here automatically and every other
 argument behaves exactly as upstream.
 
-hypnose-analysis is an optional dependency. Without it `save_figure` raises a clear
+hypnose-behavior-analysis is an optional dependency. Without it `save_figure` raises a clear
 message pointing at the install step, and nothing else in the package is affected.
 """
 
@@ -41,7 +41,7 @@ def _session_dirs(subject_dir: Path, date: str | None) -> list[Path]:
 def resolve_eeg_figure_dir(subjids, dates=None) -> Path:
     """Where figures for this subject/date scope belong in the EEG derivatives tree.
 
-    Mirrors hypnose-analysis's scoping rules so figures land in a predictable place
+    Mirrors hypnose-behavior-analysis's scoping rules so figures land in a predictable place
     regardless of which repo produced them:
 
     - several subjects           -> derivatives/figures
@@ -75,15 +75,15 @@ def resolve_eeg_figure_dir(subjids, dates=None) -> Path:
 
 
 _HYPNOSE_ANALYSIS_HINT = (
-    "Saving figures requires hypnose-analysis (it owns the shared figure styles).\n"
-    "Install it into this environment:  pip install -e /path/to/hypnose-analysis"
+    "Saving figures requires hypnose-behavior-analysis (it owns the shared figure styles).\n"
+    "Install it into this environment:  pip install -e /path/to/hypnose-behavior-analysis"
 )
 
 
 def _register_resolver() -> bool:
-    """Point hypnose-analysis's save_figure at the EEG tree. True if registered."""
+    """Point hypnose-behavior-analysis's save_figure at the EEG tree. True if registered."""
     try:
-        from hypnose.io.save import set_figure_dir_resolver
+        from hypnose_behavior.io.save import set_figure_dir_resolver
     except ImportError:
         return False
     set_figure_dir_resolver(resolve_eeg_figure_dir)
@@ -96,18 +96,18 @@ _REGISTERED = _register_resolver()
 def save_figure(fig, save_name: str, *, subjids, dates=None, **kwargs):
     """Save `fig` as a styled PDF into the EEG derivatives tree.
 
-    Thin pass-through to hypnose-analysis's `save_figure` — every keyword it accepts
+    Thin pass-through to hypnose-behavior-analysis's `save_figure` — every keyword it accepts
     (`subdir`, `fig_dir`, `dpi`, `bbox_inches`, `clear_legends`, `boxplot`) works
     here unchanged. Destination comes from `resolve_eeg_figure_dir` unless an
     explicit `fig_dir=` is passed.
     """
     try:
-        from hypnose.io.save import save_figure as _save_figure
+        from hypnose_behavior.io.save import save_figure as _save_figure
     except ImportError as exc:
         raise ImportError(_HYPNOSE_ANALYSIS_HINT) from exc
 
     if not _REGISTERED:
-        # hypnose-analysis appeared after import time; register now.
+        # hypnose-behavior-analysis appeared after import time; register now.
         _register_resolver()
 
     return _save_figure(fig, save_name, subjids=subjids, dates=dates, **kwargs)

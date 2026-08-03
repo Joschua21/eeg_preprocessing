@@ -20,7 +20,7 @@ DEFAULT_CHANNEL_LABELS = [
 EEG_SUBDIR = "hypnose_eeg"
 
 # Legacy fallback: repo-local symlink to the EEG dataset, used only when the shared
-# hypnose-analysis data-location system is unavailable (see paths.py).
+# hypnose-behavior-analysis data-location system is unavailable (see paths.py).
 DATA_SYMLINK = Path("data/hypnose_eeg")
 
 # Output labels: 0=Wake, 1=NREM, 2=REM, 3=Undefined
@@ -81,7 +81,7 @@ DEFAULT_DISTRIBUTION_BIN_WIDTH = 0.05
 # --------------------------------------------------------------------------------
 # Figure style
 # --------------------------------------------------------------------------------
-# Which hypnose-analysis figure style every plot in this package is drawn with.
+# Which hypnose-behavior-analysis figure style every plot in this package is drawn with.
 # One of "nature", "poster", "presentation", or None to leave matplotlib alone.
 #
 # This is only a declaration — nothing is applied at import time. The style is

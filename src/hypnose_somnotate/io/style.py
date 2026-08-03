@@ -1,12 +1,12 @@
 """Deterministic application of the configured figure style.
 
-Styles live in hypnose-analysis (`hypnose.io.save`) so every repo that plots
+Styles live in hypnose-behavior-analysis (`hypnose_behavior.io.save`) so every repo that plots
 Hypnose data produces figures with one look. This module is the only place that
 mutates global matplotlib state, and it does so at figure-creation time rather
 than import time — see `config.DEFAULT_FIGURE_STYLE` for why that ordering
 matters.
 
-hypnose-analysis is an optional dependency: without it, `ensure_style` is a
+hypnose-behavior-analysis is an optional dependency: without it, `ensure_style` is a
 silent no-op and figures render unstyled rather than raising.
 """
 
@@ -36,7 +36,7 @@ def ensure_style(style: str | None = None, force: bool = False) -> str | None:
     Returns:
     --------
     The active style name, or None if no style was applied (either because it is
-    disabled in config or because hypnose-analysis is not installed).
+    disabled in config or because hypnose-behavior-analysis is not installed).
     """
     global _applied
 
@@ -47,9 +47,9 @@ def ensure_style(style: str | None = None, force: bool = False) -> str | None:
         return _applied
 
     try:
-        from hypnose.io.save import use_style
+        from hypnose_behavior.io.save import use_style
     except ImportError:
-        # hypnose-analysis not installed — plot unstyled rather than failing.
+        # hypnose-behavior-analysis not installed — plot unstyled rather than failing.
         return None
 
     use_style(style)

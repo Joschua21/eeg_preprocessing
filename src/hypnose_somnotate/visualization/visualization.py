@@ -688,7 +688,7 @@ def plot_state_distributions(
     With `save=True` both figures are written as PDF (named `{save_name}_norm_…` /
     `{save_name}_raw_…`, at `save_dpi`) into the session's `figures/` directory —
     `derivatives/sub-*/ses-*/figures`, i.e. next to `saved_results`. Figure styling
-    follows the active matplotlib rcParams, so call hypnose-analysis's `use_style()` at
+    follows the active matplotlib rcParams, so call hypnose-behavior-analysis's `use_style()` at
     the top of the notebook to apply the house style.
 
     Returns a list of dicts, one per session, each with keys: `subject`, `date`,
@@ -796,7 +796,7 @@ def plot_state_distributions(
 
         saved_paths: list[Path] = []
         if save:
-            # Routed through hypnose-analysis's save_figure so these PDFs match the
+            # Routed through hypnose-behavior-analysis's save_figure so these PDFs match the
             # figures every other Hypnose repo emits (style, dpi, fonttype). The
             # session figures dir is passed explicitly: it is already resolved here
             # from the recording, and it is more specific than a subject/date lookup.
