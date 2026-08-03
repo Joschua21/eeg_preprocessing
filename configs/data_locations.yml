@@ -1,0 +1,33 @@
+# EEG data-location profiles (committed, shared across machines).
+#
+# Pick which one is active PER MACHINE with:
+#     hypnose-set-data-location --config-dir configs <name>
+# That writes configs/data_locations.local.yml (git-ignored), so your choice is never
+# committed.
+#
+# hypnose_somnotate.io.paths resolves the data roots in this order:
+#     HYPNOSE_EEG_* env vars  >  active profile (below)  >  legacy data/hypnose_eeg symlink
+#
+# Each profile needs `rawdata`; `derivatives` defaults to the sibling of `rawdata` if
+# omitted. The EEG dataset root (the directory holding rawdata/, derivatives/ and
+# somnotate_training/) is the parent of `rawdata`.
+#
+# These mirror hypnose-behavior-analysis's profiles with `hypnose_eeg` inserted, which is
+# where this pipeline's data has always resolved to. Before this repo had its own config
+# it derived the EEG root from the behavioural profile's server_root; owning these
+# profiles is what makes hypnose-somnotate installable with hypnose-helpers alone.
+
+default_active: null    # optional fallback profile when no local override is set
+
+profiles:
+  server-mac:
+    rawdata: /Volumes/harris/hypnose/hypnose_eeg/rawdata
+    derivatives: /Volumes/harris/hypnose/hypnose_eeg/derivatives
+
+  server-windows:
+    rawdata: '\\ceph-gw02.hpc.swc.ucl.ac.uk\harris\hypnose\hypnose_eeg\rawdata'
+    derivatives: '\\ceph-gw02.hpc.swc.ucl.ac.uk\harris\hypnose\hypnose_eeg\derivatives'
+
+  server-linux:
+    rawdata: '/mnt/harris/hypnose/hypnose_eeg/rawdata'
+    derivatives: '/mnt/harris/hypnose/hypnose_eeg/derivatives'

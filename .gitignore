@@ -20,3 +20,5 @@ venv/
 *.egg-info/
 
 data/
+# Per-machine data-location selection (the shared profiles in configs/data_locations.yml ARE tracked)
+configs/data_locations.local.yml

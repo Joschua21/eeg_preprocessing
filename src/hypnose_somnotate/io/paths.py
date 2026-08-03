@@ -9,7 +9,11 @@ from pathlib import Path
 import re
 from typing import Iterable
 
-from ..config import DATA_SYMLINK, EEG_SUBDIR
+from functools import lru_cache
+
+from hypnose_helpers.io.paths import DataLocations
+
+from ..config import DATA_SYMLINK
 
 SUBJECT_RE = re.compile(r"^sub-(\d{3})")
 SESSION_DATE_RE = re.compile(r"^ses-([^-_]+)_date-(\d{8})$")
@@ -66,59 +70,26 @@ def _date_in_filter(date: str, date_list: Iterable[str] | None, date_range: tupl
 
 
 # Data-root resolution order (highest priority first):
-#   1. HYPNOSE_EEG_RAWDATA_ROOT / HYPNOSE_EEG_DERIVATIVES_ROOT env vars (explicit override)
-#   2. the shared hypnose-behavior-analysis data-location profile: server_root / hypnose_eeg / <sub>
-#      (selected via that repo's scripts/set_data_location.py; honours HYPNOSE_* env too)
-#   3. legacy fallback: the repo-local data/hypnose_eeg symlink under repo_root
-# This lets the EEG pipeline share one machine-level data-location config with
-# hypnose-behavior-analysis instead of a per-clone symlink, while still working without it.
+#   1. HYPNOSE_EEG_* env vars (explicit override; the QC sandbox and CI use these)
+#   2. this repo's active data-location profile, configs/data_locations.yml
+#   3. legacy fallback: the repo-local data/hypnose_eeg symlink
+#
+# The mechanism itself lives in hypnose-helpers, parameterised by config dir and env
+# prefix. Before restructure_2 Phase 2a this repo derived its EEG root from
+# hypnose-behavior-analysis's profile, which meant a behavioural install was required to
+# locate EEG data; owning these profiles removes that dependency.
 
-_ENV_VAR = {"rawdata": "HYPNOSE_EEG_RAWDATA_ROOT", "derivatives": "HYPNOSE_EEG_DERIVATIVES_ROOT"}
-_SHARED_ENV_VARS = (
-    "HYPNOSE_SERVER_ROOT", "HYPNOSE_RAWDATA_ROOT", "HYPNOSE_DERIVATIVES_ROOT", "HYPNOSE_DATA_ROOT",
-)
-
-
-def _env_root(subdir: str) -> Path | None:
-    val = os.getenv(_ENV_VAR[subdir])
-    if not val:
-        return None
-    return Path(os.path.expanduser(os.path.expandvars(val))).resolve()
+_REPO_ROOT = Path(__file__).resolve().parents[3]   # io -> hypnose_somnotate -> src -> repo
 
 
-def _shared_eeg_root() -> Path | None:
-    """EEG dataset root via hypnose-behavior-analysis's data-location system, or None.
-
-    Only used when that system is actually configured (an active profile or a shared
-    HYPNOSE_* env var); otherwise we defer to the legacy symlink so the pipeline still
-    works when hypnose-behavior-analysis is absent or unconfigured.
-    """
-    try:
-        from hypnose_behavior.io import paths as ha_paths
-    except Exception:
-        return None
-    has_shared_env = any(os.getenv(v) for v in _SHARED_ENV_VARS)
-    if not ha_paths.get_active() and not has_shared_env:
-        return None
-    try:
-        return Path(ha_paths.get_server_root()) / EEG_SUBDIR
-    except Exception:
-        return None
-
-
-def _resolve_data_root(subdir: str, repo_root: Path | None) -> Path:
-    env = _env_root(subdir)
-    if env is not None:
-        return env
-    shared = _shared_eeg_root()
-    if shared is not None:
-        return (shared / subdir).resolve()
-    if repo_root is not None:
-        return (Path(repo_root) / DATA_SYMLINK / subdir).resolve()
-    raise FileNotFoundError(
-        f"Cannot resolve EEG {subdir} root: no {_ENV_VAR[subdir]} env, no active "
-        "hypnose-behavior-analysis data-location profile, and no repo_root for the symlink fallback. "
-        "Run hypnose-behavior-analysis's scripts/set_data_location.py, or pass repo_root."
+@lru_cache
+def _locations(repo_root: Path | None = None) -> DataLocations:
+    """DataLocations for this repo (or an explicitly given clone)."""
+    root = Path(repo_root) if repo_root is not None else _REPO_ROOT
+    return DataLocations(
+        config_dir=root / "configs",
+        data_root=root / DATA_SYMLINK,
+        env_prefix="HYPNOSE_EEG",
     )
 
 
@@ -131,38 +102,26 @@ def get_eeg_root(repo_root: Path | None = None) -> Path:
     files they are trained *from* sit at `<eeg root>/somnotate_training/`. Those are
     two different directories that happen to share a name.
 
-    Resolution mirrors `_resolve_data_root`, env vars first:
-    `HYPNOSE_EEG_ROOT` → parent of `HYPNOSE_EEG_RAWDATA_ROOT` → hypnose-behavior-analysis
-    profile → the legacy `data/hypnose_eeg` symlink.
+    `HYPNOSE_EEG_ROOT` overrides everything; otherwise this is the parent of the
+    resolved rawdata root.
     """
     explicit = os.getenv("HYPNOSE_EEG_ROOT")
     if explicit:
         return Path(os.path.expanduser(os.path.expandvars(explicit))).resolve()
-
-    raw_env = _env_root("rawdata")
-    if raw_env is not None:
-        return raw_env.parent
-
-    shared = _shared_eeg_root()
-    if shared is not None:
-        return shared.resolve()
-
-    if repo_root is not None:
-        return (Path(repo_root) / DATA_SYMLINK).resolve()
-
-    raise FileNotFoundError(
-        "Cannot resolve the EEG dataset root: no HYPNOSE_EEG_ROOT or "
-        "HYPNOSE_EEG_RAWDATA_ROOT env var, no active hypnose-behavior-analysis data-location "
-        "profile, and no repo_root for the symlink fallback."
-    )
+    return _locations(repo_root).get_server_root()
 
 
 def get_raw_root(repo_root: Path | None = None) -> Path:
-    return _resolve_data_root("rawdata", repo_root)
+    return _locations(repo_root).get_rawdata_root()
 
 
 def get_derivatives_root(repo_root: Path | None = None) -> Path:
-    return _resolve_data_root("derivatives", repo_root)
+    return _locations(repo_root).get_derivatives_root()
+
+
+def reload(repo_root: Path | None = None) -> None:
+    """Clear cached roots so a changed config or env var is picked up in a live process."""
+    _locations(repo_root).reload()
 
 
 def find_recordings(
