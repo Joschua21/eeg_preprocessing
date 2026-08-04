@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from hypnose_helpers.viz.save import save_figure as _save_figure
+from hypnose_helpers.io.layout import filter_sessions, list_sessions
 
 from .paths import _find_subject_dir, get_derivatives_root, normalize_subjid
 
@@ -29,11 +30,20 @@ def _coerce_list(value) -> list:
 
 
 def _session_dirs(subject_dir: Path, date: str | None) -> list[Path]:
-    """Session directories under `subject_dir`, optionally filtered to one date."""
+    """Session directories under `subject_dir`, optionally filtered to one date.
+
+    Shares the family's layout walker (restructure_2 Phase 2b) but keeps this module's
+    never-raise contract: `resolve_eeg_figure_dir` degrades to a coarser directory
+    rather than failing a save, so an ambiguous or malformed tree must read as "no
+    match" here rather than propagating.
+    """
     if not subject_dir.exists():
         return []
-    pattern = f"ses-*_date-{date}" if date else "ses-*_date-*"
-    return sorted(p for p in subject_dir.glob(pattern) if p.is_dir())
+    try:
+        sessions = list_sessions(subject_dir)
+        return [s.path for s in filter_sessions(sessions, date=date)]
+    except (ValueError, OSError):
+        return []
 
 
 def resolve_eeg_figure_dir(subjids, dates=None) -> Path:
