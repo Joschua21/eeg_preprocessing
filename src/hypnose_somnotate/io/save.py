@@ -16,7 +16,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from hypnose_helpers.viz.save import save_figure as _save_figure
+from hypnose_helpers.viz.metadata import read_figure_metadata  # noqa: F401  (re-exported)
 from hypnose_helpers.io.layout import filter_sessions, list_sessions
+from hypnose_helpers.provenance import provenance as _provenance
 
 from .paths import _find_subject_dir, get_derivatives_root, normalize_subjid
 
@@ -83,11 +85,17 @@ def resolve_eeg_figure_dir(subjids, dates=None) -> Path:
 
 
 def save_figure(fig, save_name: str, *, subjids, dates=None, **kwargs):
-    """Save `fig` as a styled PDF into the EEG derivatives tree.
+    """Save `fig` as a styled PDF into the EEG derivatives tree, provenance embedded.
 
     Thin pass-through to hypnose-helpers' `save_figure` -- every keyword it accepts
     (`subdir`, `dpi`, `bbox_inches`, `clear_legends`, `boxplot`) works here unchanged.
     Destination comes from `resolve_eeg_figure_dir` unless an explicit `fig_dir=` is given.
+
+    Provenance is captured here with *this* module excluded, because being a thin
+    pass-through is exactly what breaks the default frame walk: helpers would stop at
+    this function and record it as the plotter. Skipping it names the real caller
+    (restructure_2 Phase 2c). Recover it with `read_figure_metadata`.
     """
     kwargs.setdefault("fig_dir", resolve_eeg_figure_dir(subjids, dates))
+    kwargs.setdefault("provenance", _provenance(skip_modules=(__name__,)))
     return _save_figure(fig, save_name, subjids=subjids, dates=dates, **kwargs)
